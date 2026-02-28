@@ -5,7 +5,7 @@
 
 export const GAME_CONSTANTS = {
   // Player Movement
-  PLAYER_BASE_SPEED: 100, // pixels per second (reduced for more realistic movement)
+  PLAYER_BASE_SPEED: 70, // pixels per second (reduced for more realistic movement)
   PLAYER_ACCELERATION_TIME: 300, // milliseconds to reach full speed
   PLAYER_MOMENTUM_OVERSHOOT: 100, // milliseconds of drift after stopping
 

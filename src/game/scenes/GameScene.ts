@@ -10,6 +10,7 @@ import { getDifficultyConfig } from '../config/difficultySettings';
 
 // Import entities and systems
 import Player from '../entities/Player';
+import NPC from '../entities/NPC';
 import Doll from '../entities/Doll';
 import InputManager from '../managers/InputManager';
 import ParticleManager from '../managers/ParticleManager';
@@ -26,6 +27,7 @@ export default class GameScene extends Phaser.Scene {
 
   // Entities
   private player!: Player;
+  private npcs: NPC[] = [];
   private doll!: Doll;
 
   // Systems
@@ -72,6 +74,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Create entities
     this.player = new Player(this, width / 2, height * 0.9);
+    this.createNPCs(width, height);
     this.doll = new Doll(this, width / 2, 80, config);
 
     // Check music setting
@@ -114,12 +117,29 @@ export default class GameScene extends Phaser.Scene {
       this.doll.update(time, delta);
       this.movementSystem.update(time, delta);
 
+      // Update NPCs with AI
+      const isGreenLight = this.stateManager.isGreenLight();
+      this.npcs.forEach(npc => {
+        npc.updateAI(isGreenLight, delta);
+        npc.update(time, delta);
+      });
+
       // Check for detection during red light
       if (this.stateManager.isRedLight()) {
         const caught = this.detectionSystem.checkPlayer(this.player, this.doll.isFacing());
         if (caught) {
           this.handlePlayerCaught();
         }
+
+        // Check NPCs for detection
+        this.npcs.forEach(npc => {
+          if (!npc.isEliminated) {
+            const npcCaught = this.detectionSystem.checkPlayer(npc as any, this.doll.isFacing());
+            if (npcCaught) {
+              npc.eliminate();
+            }
+          }
+        });
       }
 
       // Check for victory
@@ -129,6 +149,47 @@ export default class GameScene extends Phaser.Scene {
 
       // Update timer
       this.updateTimer(delta);
+    }
+  }
+
+  private createNPCs(width: number, height: number): void {
+    // Get NPC count based on difficulty
+    let npcCount: number;
+    switch (this.difficulty) {
+      case 'EASY':
+        npcCount = GAME_CONSTANTS.NPC_COUNT_EASY;
+        break;
+      case 'NORMAL':
+        npcCount = GAME_CONSTANTS.NPC_COUNT_NORMAL;
+        break;
+      case 'HARD':
+        npcCount = GAME_CONSTANTS.NPC_COUNT_HARD;
+        break;
+      default:
+        npcCount = GAME_CONSTANTS.NPC_COUNT_NORMAL;
+    }
+
+    console.log(`🤖 Creating ${npcCount} NPCs for ${this.difficulty} difficulty`);
+
+    // Create NPCs at random positions
+    for (let i = 0; i < npcCount; i++) {
+      // Random X position (avoid edges and player position)
+      const playerX = width / 2;
+      let x = 50 + Math.random() * (width - 100);
+
+      // Keep NPCs away from player starting position
+      while (Math.abs(x - playerX) < 60) {
+        x = 50 + Math.random() * (width - 100);
+      }
+
+      // Random Y position in starting area (slight variation)
+      const y = height * 0.85 + Math.random() * height * 0.1;
+
+      // Random player number (avoiding 456 which is the player)
+      const playerNumber = Math.floor(Math.random() * 455) + 1;
+
+      const npc = new NPC(this, x, y, playerNumber);
+      this.npcs.push(npc);
     }
   }
 
@@ -247,6 +308,11 @@ export default class GameScene extends Phaser.Scene {
       this.particleManager.createConfetti(data.x, data.y);
       this.particleManager.createFloatingText(data.x, data.y - 60, 'WINNER!', '#FFD700');
       this.soundGenerator.playVictory();
+    });
+
+    this.events.on('npc-eliminated', (data: { x: number; y: number }) => {
+      this.particleManager.createElimination(data.x, data.y);
+      this.soundGenerator.playGunshot();
     });
   }
 
