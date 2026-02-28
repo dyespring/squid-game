@@ -17,7 +17,7 @@ import DetectionSystem from '../systems/DetectionSystem';
 import MovementSystem from '../systems/MovementSystem';
 import GameStateManager from '../systems/GameStateManager';
 import SoundGenerator from '../utils/SoundGenerator';
-import MusicGenerator from '../utils/MusicGenerator';
+import AudioManager from '../managers/AudioManager';
 
 export default class GameScene extends Phaser.Scene {
   // Configuration
@@ -35,7 +35,7 @@ export default class GameScene extends Phaser.Scene {
   private movementSystem!: MovementSystem;
   private stateManager!: GameStateManager;
   private soundGenerator!: SoundGenerator;
-  private musicGenerator!: MusicGenerator;
+  private audioManager!: AudioManager;
   private musicEnabled: boolean = true;
 
   // UI
@@ -77,6 +77,18 @@ export default class GameScene extends Phaser.Scene {
     // Check music setting
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
 
+    // Get AudioManager from registry
+    this.audioManager = this.registry.get('audioManager') as AudioManager;
+
+    // Load gameplay music
+    if (!this.audioManager) {
+      console.warn('AudioManager not found in registry, creating new instance');
+      this.audioManager = new AudioManager();
+    }
+
+    // Load the Squid Game background music
+    this.audioManager.loadMusic('gameplay', ['/audio/gameplay-music.mp3']);
+
     // Create systems
     this.inputManager = new InputManager(this);
     this.particleManager = new ParticleManager(this);
@@ -84,7 +96,6 @@ export default class GameScene extends Phaser.Scene {
     this.movementSystem = new MovementSystem(this, this.player, this.inputManager);
     this.stateManager = new GameStateManager(GameState.READY);
     this.soundGenerator = new SoundGenerator();
-    this.musicGenerator = new MusicGenerator();
 
     // Create UI
     this.createHUD();
@@ -195,9 +206,6 @@ export default class GameScene extends Phaser.Scene {
       this.stateManager.setState(GameState.GREEN_LIGHT);
       this.updateStateUI('GREEN LIGHT!', '#4CAF50', COLORS.TRACKSUIT_GREEN);
       this.soundGenerator.playGreenLight();
-      if (this.musicEnabled) {
-        this.musicGenerator.relief();
-      }
     });
 
     this.events.on('doll-turning-to-face', () => {
@@ -212,9 +220,6 @@ export default class GameScene extends Phaser.Scene {
       this.stateManager.setState(GameState.RED_LIGHT);
       this.updateStateUI('RED LIGHT!', '#E63946', COLORS.DANGER_RED);
       this.soundGenerator.playRedLight();
-      if (this.musicEnabled) {
-        this.musicGenerator.intensify();
-      }
     });
 
     this.events.on('doll-turning-away', () => {
@@ -291,9 +296,9 @@ export default class GameScene extends Phaser.Scene {
   private startGameplay(): void {
     console.log('🏃 Starting gameplay');
 
-    // Start gameplay music
+    // Start Squid Game background music
     if (this.musicEnabled) {
-      this.musicGenerator.playGameplayMusic();
+      this.audioManager.playMusic();
     }
 
     // Start doll cycle
@@ -428,8 +433,8 @@ export default class GameScene extends Phaser.Scene {
 
   shutdown(): void {
     // Cleanup music
-    if (this.musicGenerator) {
-      this.musicGenerator.stopMusic();
+    if (this.audioManager) {
+      this.audioManager.stopMusic();
     }
 
     // Cleanup events
