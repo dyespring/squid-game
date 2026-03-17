@@ -17,6 +17,7 @@ import ParticleManager from '../managers/ParticleManager';
 import DetectionSystem from '../systems/DetectionSystem';
 import MovementSystem from '../systems/MovementSystem';
 import GameStateManager from '../systems/GameStateManager';
+import { ScoreSystem } from '../systems/ScoreSystem';
 import SoundGenerator from '../utils/SoundGenerator';
 import AudioManager from '../managers/AudioManager';
 
@@ -36,6 +37,7 @@ export default class GameScene extends Phaser.Scene {
   private detectionSystem!: DetectionSystem;
   private movementSystem!: MovementSystem;
   private stateManager!: GameStateManager;
+  private scoreSystem!: ScoreSystem;
   private soundGenerator!: SoundGenerator;
   private audioManager!: AudioManager;
   private musicEnabled: boolean = true;
@@ -98,6 +100,7 @@ export default class GameScene extends Phaser.Scene {
     this.detectionSystem = new DetectionSystem(this, config);
     this.movementSystem = new MovementSystem(this, this.player, this.inputManager);
     this.stateManager = new GameStateManager(GameState.READY);
+    this.scoreSystem = new ScoreSystem();
     this.soundGenerator = new SoundGenerator();
 
     // Create UI
@@ -362,6 +365,9 @@ export default class GameScene extends Phaser.Scene {
   private startGameplay(): void {
     console.log('🏃 Starting gameplay');
 
+    // Start score tracking
+    this.scoreSystem.start();
+
     // Start Squid Game background music
     if (this.musicEnabled) {
       this.audioManager.playMusic();
@@ -463,12 +469,16 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private calculateScore(): number {
-    const timeBonus = Math.ceil(this.timeRemaining) * GAME_CONSTANTS.TIME_BONUS_MULTIPLIER;
-    const difficultyMultiplier = GAME_CONSTANTS.DIFFICULTY_MULTIPLIER[this.difficulty];
-    const baseScore = GAME_CONSTANTS.BASE_SCORE;
+    // Calculate score using ScoreSystem
+    const scoreCalculation = this.scoreSystem.calculateFinalScore(
+      Math.ceil(this.timeRemaining),
+      this.difficulty
+    );
 
-    const finalScore = Math.floor((baseScore + timeBonus) * difficultyMultiplier);
-    return finalScore;
+    // Store score breakdown in registry for victory screen
+    this.registry.set('scoreBreakdown', scoreCalculation);
+
+    return scoreCalculation.finalScore;
   }
 
   private gameOver(): void {
@@ -481,15 +491,8 @@ export default class GameScene extends Phaser.Scene {
   private victory(score: number): void {
     // Save score to registry for victory screen
     this.registry.set('currentScore', score);
-
-    // Update high score
-    const highScore = this.registry.get('highScore') as number;
-    if (score > highScore) {
-      this.registry.set('highScore', score);
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('squidgame-highscore', score.toString());
-      }
-    }
+    this.registry.set('currentDifficulty', this.difficulty);
+    this.registry.set('isPerfectRun', this.scoreSystem.isPerfectRun());
 
     this.cameras.main.fadeOut(500);
     this.cameras.main.once('camerafadeoutcomplete', () => {

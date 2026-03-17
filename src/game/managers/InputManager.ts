@@ -29,7 +29,7 @@ export default class InputManager {
     return (
       'ontouchstart' in window ||
       navigator.maxTouchPoints > 0 ||
-      // @ts-ignore - legacy property
+      // @ts-expect-error - legacy IE property
       navigator.msMaxTouchPoints > 0
     );
   }

@@ -7,9 +7,11 @@ import Phaser from 'phaser';
 import { SCENES, COLORS } from '../config/constants';
 import type { Difficulty } from '@/types/game.types';
 import MusicGenerator from '../utils/MusicGenerator';
+import { HighScoreManager } from '../managers/HighScoreManager';
 
 export default class MenuScene extends Phaser.Scene {
   private musicGenerator!: MusicGenerator;
+  private highScoreManager!: HighScoreManager;
   private musicEnabled: boolean = true;
 
   constructor() {
@@ -24,8 +26,9 @@ export default class MenuScene extends Phaser.Scene {
     // Check music setting
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
 
-    // Initialize music generator
+    // Initialize managers
     this.musicGenerator = new MusicGenerator();
+    this.highScoreManager = new HighScoreManager();
 
     // Play menu music if enabled
     if (this.musicEnabled) {
@@ -87,13 +90,25 @@ export default class MenuScene extends Phaser.Scene {
       delay: 200,
     });
 
-    // High score display
-    const highScore = this.registry.get('highScore') as number;
-    if (highScore > 0) {
+    // High score display - show best across all difficulties
+    const allScores = this.highScoreManager.getAllHighScores();
+    const bestOverall = Math.max(
+      allScores.EASY[0]?.score || 0,
+      allScores.NORMAL[0]?.score || 0,
+      allScores.HARD[0]?.score || 0
+    );
+
+    if (bestOverall > 0) {
+      // Find which difficulty has the best score
+      let bestDifficulty: Difficulty = 'NORMAL';
+      if (allScores.EASY[0]?.score === bestOverall) bestDifficulty = 'EASY';
+      else if (allScores.NORMAL[0]?.score === bestOverall) bestDifficulty = 'NORMAL';
+      else if (allScores.HARD[0]?.score === bestOverall) bestDifficulty = 'HARD';
+
       const hsText = this.add.text(
         width / 2,
         200,
-        `🏆 High Score: ${highScore}`,
+        `🏆 Best: ${bestOverall} (${bestDifficulty})`,
         {
           fontSize: '18px',
           color: '#FFD700',

@@ -46,22 +46,32 @@ export default defineConfig({
     },
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          phaser: ['phaser'],
-          vendor: ['react', 'react-dom', 'zustand'],
-          audio: ['howler'],
-        },
-      },
-    },
+    target: 'esnext',
     minify: 'terser',
     terserOptions: {
       compress: {
         drop_console: true,
         drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info'],
+      },
+      format: {
+        comments: false,
       },
     },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          phaser: ['phaser'],
+          vendor: ['react', 'react-dom', 'zustand'],
+          audio: ['howler', 'gsap'],
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+    sourcemap: false,
   },
   server: {
     port: 5173,
