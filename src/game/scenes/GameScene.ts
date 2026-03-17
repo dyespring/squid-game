@@ -47,6 +47,10 @@ export default class GameScene extends Phaser.Scene {
   private timerText!: Phaser.GameObjects.Text;
   private timeRemaining: number = 0;
 
+  // Pause
+  private isPaused: boolean = false;
+  private pauseOverlay!: Phaser.GameObjects.Container;
+
   // Screen border for state visualization
   private stateBorder!: Phaser.GameObjects.Rectangle;
 
@@ -114,7 +118,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    // Update entities
+    if (this.isPaused) return;
+
     if (this.stateManager.isPlaying()) {
       this.player.update(time, delta);
       this.doll.update(time, delta);
@@ -262,6 +267,98 @@ export default class GameScene extends Phaser.Scene {
       fontSize: '14px',
       color: '#8C8C8C',
     }).setOrigin(0.5).setDepth(100);
+
+    // Pause button
+    const pauseBtn = this.add.text(width - 20, 30, '⏸', {
+      fontSize: '28px',
+    });
+    pauseBtn.setOrigin(0.5).setDepth(100);
+    pauseBtn.setInteractive({ useHandCursor: true });
+    pauseBtn.on('pointerdown', () => this.togglePause());
+
+    // Keyboard pause (ESC or P)
+    this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
+    this.input.keyboard?.on('keydown-P', () => this.togglePause());
+
+    // Build pause overlay (hidden initially)
+    this.createPauseOverlay();
+  }
+
+  private createPauseOverlay(): void {
+    const { width, height } = this.cameras.main;
+    this.pauseOverlay = this.add.container(0, 0);
+    this.pauseOverlay.setDepth(200);
+    this.pauseOverlay.setVisible(false);
+
+    const bg = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+    bg.setInteractive(); // block clicks from reaching the game
+    this.pauseOverlay.add(bg);
+
+    const title = this.add.text(width / 2, height / 2 - 120, 'PAUSED', {
+      fontSize: '48px',
+      color: '#FFFFFF',
+      fontStyle: 'bold',
+    });
+    title.setOrigin(0.5);
+    this.pauseOverlay.add(title);
+
+    const resumeBtn = this.createPauseButton(width / 2, height / 2 - 20, 'RESUME', () => {
+      this.togglePause();
+    });
+    this.pauseOverlay.add(resumeBtn);
+
+    const restartBtn = this.createPauseButton(width / 2, height / 2 + 50, 'RESTART', () => {
+      this.isPaused = false;
+      this.scene.restart();
+    });
+    this.pauseOverlay.add(restartBtn);
+
+    const menuBtn = this.createPauseButton(width / 2, height / 2 + 120, 'QUIT TO MENU', () => {
+      this.isPaused = false;
+      this.cameras.main.fadeOut(300);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start(SCENES.MENU);
+      });
+    });
+    this.pauseOverlay.add(menuBtn);
+  }
+
+  private createPauseButton(
+    x: number,
+    y: number,
+    label: string,
+    callback: () => void
+  ): Phaser.GameObjects.Text {
+    const btn = this.add.text(x, y, label, {
+      fontSize: '20px',
+      color: '#FFFFFF',
+      backgroundColor: '#FF4581',
+      padding: { x: 24, y: 12 },
+      fontStyle: 'bold',
+    });
+    btn.setOrigin(0.5);
+    btn.setInteractive({ useHandCursor: true });
+    btn.on('pointerover', () => btn.setScale(1.08));
+    btn.on('pointerout', () => btn.setScale(1));
+    btn.on('pointerdown', callback);
+    return btn;
+  }
+
+  private togglePause(): void {
+    if (this.stateManager.isState(GameState.GAME_OVER) ||
+        this.stateManager.isState(GameState.VICTORY) ||
+        this.stateManager.isState(GameState.ELIMINATION) ||
+        this.stateManager.isState(GameState.READY)) {
+      return;
+    }
+
+    this.isPaused = !this.isPaused;
+    this.pauseOverlay.setVisible(this.isPaused);
+
+    if (this.isPaused) {
+      this.inputManager.reset();
+      this.player.stopMoving();
+    }
   }
 
   private setupEventListeners(): void {
@@ -410,6 +507,8 @@ export default class GameScene extends Phaser.Scene {
   private handlePlayerCaught(): void {
     console.log('💀 Player caught moving!');
 
+    this.scoreSystem.recordDetection();
+
     // Stop game
     this.doll.stopCycle();
     this.stateManager.setState(GameState.ELIMINATION);
@@ -423,7 +522,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Wait then show game over
     this.time.delayedCall(2000, () => {
-      this.gameOver();
+      this.gameOver('eliminated');
     });
   }
 
@@ -464,7 +563,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Wait then show game over
     this.time.delayedCall(2000, () => {
-      this.gameOver();
+      this.gameOver('timeout');
     });
   }
 
@@ -481,7 +580,24 @@ export default class GameScene extends Phaser.Scene {
     return scoreCalculation.finalScore;
   }
 
-  private gameOver(): void {
+  private gameOver(reason: 'eliminated' | 'timeout'): void {
+    const config = getDifficultyConfig(this.difficulty);
+    const { height } = this.cameras.main;
+    const totalDistance = height * 0.9 - this.finishY;
+    const progressPercent = Math.min(
+      100,
+      Math.floor((this.player.distanceTraveled / totalDistance) * 100)
+    );
+    const timeSurvived = config.timeLimit - Math.max(0, Math.ceil(this.timeRemaining));
+
+    this.registry.set('gameOverData', {
+      reason,
+      difficulty: this.difficulty,
+      progressPercent,
+      timeSurvived,
+      timeLimit: config.timeLimit,
+    });
+
     this.cameras.main.fadeOut(500);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start(SCENES.GAME_OVER);
@@ -501,16 +617,23 @@ export default class GameScene extends Phaser.Scene {
   }
 
   shutdown(): void {
-    // Cleanup music
+    this.isPaused = false;
+
     if (this.audioManager) {
       this.audioManager.stopMusic();
     }
 
-    // Cleanup events
+    this.input.keyboard?.off('keydown-ESC');
+    this.input.keyboard?.off('keydown-P');
+
     this.events.off('doll-green-light');
     this.events.off('doll-turning-to-face');
     this.events.off('doll-red-light');
     this.events.off('doll-turning-away');
     this.events.off('player-detected');
+    this.events.off('player-emit-dust');
+    this.events.off('player-eliminated');
+    this.events.off('player-victory');
+    this.events.off('npc-eliminated');
   }
 }

@@ -50,10 +50,7 @@ export default class DetectionSystem {
     this.createSpotlight(player.x, player.y);
 
     // Camera shake
-    this.scene.cameras.main.shake(
-      COLORS.DANGER_RED ? 500 : 500,
-      0.01
-    );
+    this.scene.cameras.main.shake(500, 0.01);
 
     // Emit detection event
     this.scene.events.emit('player-detected', { player });

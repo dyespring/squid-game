@@ -11,6 +11,7 @@ import BootScene from '../scenes/BootScene';
 import PreloadScene from '../scenes/PreloadScene';
 import MenuScene from '../scenes/MenuScene';
 import SettingsScene from '../scenes/SettingsScene';
+import LeaderboardScene from '../scenes/LeaderboardScene';
 import GameScene from '../scenes/GameScene';
 import GameOverScene from '../scenes/GameOverScene';
 import VictoryScene from '../scenes/VictoryScene';
@@ -37,6 +38,7 @@ export const GAME_CONFIG: Phaser.Types.Core.GameConfig = {
     PreloadScene,
     MenuScene,
     SettingsScene,
+    LeaderboardScene,
     GameScene,
     GameOverScene,
     VictoryScene,

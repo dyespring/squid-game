@@ -16,10 +16,7 @@ export const GAME_CONSTANTS = {
 
   // Doll Behavior
   DOLL_TURN_DURATION: 500, // milliseconds
-  GREEN_LIGHT_DURATION_MIN: 3000,
-  GREEN_LIGHT_DURATION_MAX: 6000,
-  RED_LIGHT_DURATION_MIN: 2000,
-  RED_LIGHT_DURATION_MAX: 4000,
+  // Green/red light durations are defined per-difficulty in difficultySettings.ts
 
   // Game Rules
   FINISH_LINE_PERCENTAGE: 0.1, // 10% from top of screen
@@ -70,6 +67,7 @@ export const SCENES = {
   PRELOAD: 'PreloadScene',
   MENU: 'MenuScene',
   SETTINGS: 'SettingsScene',
+  LEADERBOARD: 'LeaderboardScene',
   GAME: 'GameScene',
   GAME_OVER: 'GameOverScene',
   VICTORY: 'VictoryScene',

@@ -141,13 +141,16 @@ export default class MenuScene extends Phaser.Scene {
     this.createDifficultyButton(width / 2, 380, 'NORMAL', '#FF9800', 750);
     this.createDifficultyButton(width / 2, 460, 'HARD', '#F44336', 900);
 
+    // Leaderboard button
+    this.createLeaderboardButton(width / 2, 530, 1000);
+
     // Settings button (top right)
     this.createSettingsButton(width - 30, 30, 1050);
 
     // Instructions
     const instructions = this.add.text(
       width / 2,
-      550,
+      600,
       'Touch and hold to move\nRelease to freeze',
       {
         fontSize: '14px',
@@ -156,6 +159,34 @@ export default class MenuScene extends Phaser.Scene {
       }
     );
     instructions.setOrigin(0.5);
+  }
+
+  private createLeaderboardButton(x: number, y: number, delay: number = 0): void {
+    const btn = this.add.text(x, y, 'LEADERBOARD', {
+      fontSize: '16px',
+      color: '#FFD700',
+      fontStyle: 'bold',
+    });
+    btn.setOrigin(0.5);
+    btn.setAlpha(0);
+    btn.setInteractive({ useHandCursor: true });
+
+    this.tweens.add({
+      targets: btn,
+      alpha: 1,
+      duration: 600,
+      delay,
+    });
+
+    btn.on('pointerover', () => btn.setScale(1.1));
+    btn.on('pointerout', () => btn.setScale(1));
+    btn.on('pointerdown', () => {
+      this.musicGenerator.stopMusic();
+      this.cameras.main.fadeOut(300);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start(SCENES.LEADERBOARD);
+      });
+    });
   }
 
   private createSettingsButton(x: number, y: number, delay: number = 0): void {

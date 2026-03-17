@@ -27,6 +27,8 @@ export default class Doll extends Phaser.GameObjects.Container {
   private rightPigtail: Phaser.GameObjects.Arc;
   private dress: Phaser.GameObjects.Graphics;
   private arms: Phaser.GameObjects.Graphics;
+  private fakeTurnCooldown: number = 0;
+  private isCycleStopped: boolean = false;
 
   public isFacingPlayers: boolean = false;
 
@@ -134,6 +136,11 @@ export default class Doll extends Phaser.GameObjects.Container {
       case DollState.FACING_AWAY:
         if (this.stateTimer <= 0) {
           this.startTurningToFace();
+        } else if (this.config.fakeTurns) {
+          this.fakeTurnCooldown -= delta;
+          if (this.fakeTurnCooldown <= 0 && this.stateTimer > 1500) {
+            this.attemptFakeTurn();
+          }
         }
         break;
 
@@ -182,10 +189,49 @@ export default class Doll extends Phaser.GameObjects.Container {
       this.scanLaser = null;
     }
 
+    this.fakeTurnCooldown = Phaser.Math.Between(1500, 3000);
+
     console.log(`🟢 GREEN LIGHT for ${(this.stateTimer / 1000).toFixed(1)}s`);
 
     // Emit event
     this.scene.events.emit('doll-green-light', { duration: this.stateTimer });
+  }
+
+  /**
+   * Attempt a fake turn (psych-out) during green light on HARD.
+   * The doll starts rotating toward players but snaps back.
+   */
+  private attemptFakeTurn(): void {
+    if (Math.random() > 0.35) {
+      this.fakeTurnCooldown = Phaser.Math.Between(2000, 4000);
+      return;
+    }
+
+    this.fakeTurnCooldown = Phaser.Math.Between(3000, 5000);
+
+    this.scene.events.emit('doll-turning-to-face');
+
+    const partialAngle = 180 - Phaser.Math.Between(30, 70);
+
+    this.scene.tweens.add({
+      targets: this,
+      angle: partialAngle,
+      duration: 250,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (this.isCycleStopped) return;
+        this.scene.tweens.add({
+          targets: this,
+          angle: 180,
+          duration: 200,
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            if (this.isCycleStopped) return;
+            this.scene.events.emit('doll-turning-away');
+          },
+        });
+      },
+    });
   }
 
   /**
@@ -309,6 +355,7 @@ export default class Doll extends Phaser.GameObjects.Container {
    */
   startCycle(): void {
     console.log('🎎 Starting doll cycle');
+    this.isCycleStopped = false;
     this.startFacingAway();
   }
 
@@ -317,6 +364,7 @@ export default class Doll extends Phaser.GameObjects.Container {
    */
   stopCycle(): void {
     console.log('🎎 Stopping doll cycle');
+    this.isCycleStopped = true;
     this.stateTimer = 0;
   }
 
