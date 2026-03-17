@@ -69,6 +69,8 @@ export const SCENES = {
   SETTINGS: 'SettingsScene',
   LEADERBOARD: 'LeaderboardScene',
   GAME: 'GameScene',
+  GLASS_BRIDGE: 'GlassBridgeScene',
+  TUG_OF_WAR: 'TugOfWarScene',
   GAME_OVER: 'GameOverScene',
   VICTORY: 'VictoryScene',
 } as const;

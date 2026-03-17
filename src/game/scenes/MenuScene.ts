@@ -1,6 +1,6 @@
 /**
  * MenuScene
- * Main menu with difficulty selection
+ * Main menu with game selection and difficulty picker
  */
 
 import Phaser from 'phaser';
@@ -9,63 +9,69 @@ import type { Difficulty } from '@/types/game.types';
 import MusicGenerator from '../utils/MusicGenerator';
 import { HighScoreManager } from '../managers/HighScoreManager';
 
+interface GameOption {
+  key: string;
+  label: string;
+  subtitle: string;
+  color: string;
+  scene: string;
+}
+
+const GAMES: GameOption[] = [
+  { key: 'rlgl', label: 'Red Light Green Light', subtitle: 'Hold to move, freeze on red', color: '#E63946', scene: SCENES.GAME },
+  { key: 'glass', label: 'Glass Bridge', subtitle: 'Pick the safe panel', color: '#4488FF', scene: SCENES.GLASS_BRIDGE },
+  { key: 'tug', label: 'Tug of War', subtitle: 'Tap to pull your team', color: '#FF9800', scene: SCENES.TUG_OF_WAR },
+];
+
 export default class MenuScene extends Phaser.Scene {
   private musicGenerator!: MusicGenerator;
   private highScoreManager!: HighScoreManager;
   private musicEnabled: boolean = true;
+  private selectedGame: GameOption = GAMES[0];
+  private difficultyButtons: Map<Difficulty, { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }> = new Map();
+  private selectedDifficulty: Difficulty = 'NORMAL';
 
   constructor() {
     super({ key: SCENES.MENU });
   }
 
   create(): void {
-    console.log('🎮 MenuScene: Showing menu');
-
     const { width, height } = this.cameras.main;
 
-    // Check music setting
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
 
-    // Initialize managers
     this.musicGenerator = new MusicGenerator();
     this.highScoreManager = new HighScoreManager();
 
-    // Play menu music if enabled
     if (this.musicEnabled) {
       this.musicGenerator.playMenuMusic();
     }
 
-    // Listen for music setting changes
     this.game.events.on('music-setting-changed', this.handleMusicSettingChanged, this);
 
-    // Fade in
     this.cameras.main.fadeIn(500);
 
     // Background
     this.add.rectangle(width / 2, height / 2, width, height, COLORS.BACKGROUND_CREAM);
 
     // Title
-    const title = this.add.text(width / 2, 100, 'SQUID GAME', {
-      fontSize: '48px',
+    const title = this.add.text(width / 2, 60, 'SQUID GAME', {
+      fontSize: '42px',
       color: '#FF4581',
       fontStyle: 'bold',
       stroke: '#8B2252',
       strokeThickness: 4,
-    });
-    title.setOrigin(0.5);
-    title.setAlpha(0);
+    }).setOrigin(0.5).setAlpha(0);
 
-    // Animate title entrance
     this.tweens.add({
       targets: title,
       alpha: 1,
-      y: 100,
-      from: { y: 60 },
+      y: 60,
+      from: { y: 30 },
       duration: 800,
       ease: 'Back.easeOut',
     });
 
-    // Pulsing title
     this.tweens.add({
       targets: title,
       scale: 1.05,
@@ -75,22 +81,7 @@ export default class MenuScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    // Subtitle
-    const subtitle = this.add.text(width / 2, 160, 'Red Light, Green Light', {
-      fontSize: '20px',
-      color: '#1A1A1A',
-    });
-    subtitle.setOrigin(0.5);
-    subtitle.setAlpha(0);
-
-    this.tweens.add({
-      targets: subtitle,
-      alpha: 1,
-      duration: 800,
-      delay: 200,
-    });
-
-    // High score display - show best across all difficulties
+    // High score
     const allScores = this.highScoreManager.getAllHighScores();
     const bestOverall = Math.max(
       allScores.EASY[0]?.score || 0,
@@ -99,143 +90,224 @@ export default class MenuScene extends Phaser.Scene {
     );
 
     if (bestOverall > 0) {
-      // Find which difficulty has the best score
-      let bestDifficulty: Difficulty = 'NORMAL';
-      if (allScores.EASY[0]?.score === bestOverall) bestDifficulty = 'EASY';
-      else if (allScores.NORMAL[0]?.score === bestOverall) bestDifficulty = 'NORMAL';
-      else if (allScores.HARD[0]?.score === bestOverall) bestDifficulty = 'HARD';
+      let bestDiff: Difficulty = 'NORMAL';
+      if (allScores.EASY[0]?.score === bestOverall) bestDiff = 'EASY';
+      else if (allScores.HARD[0]?.score === bestOverall) bestDiff = 'HARD';
 
-      const hsText = this.add.text(
-        width / 2,
-        200,
-        `🏆 Best: ${bestOverall} (${bestDifficulty})`,
-        {
-          fontSize: '18px',
-          color: '#FFD700',
-          fontStyle: 'bold',
-        }
-      );
-      hsText.setOrigin(0.5);
-      hsText.setAlpha(0);
+      const hs = this.add.text(width / 2, 105, `Best: ${bestOverall} (${bestDiff})`, {
+        fontSize: '15px', color: '#B8860B', fontStyle: 'bold',
+      }).setOrigin(0.5).setAlpha(0);
 
-      this.tweens.add({
-        targets: hsText,
-        alpha: 1,
-        duration: 800,
-        delay: 400,
-      });
-
-      // Gentle pulse
-      this.tweens.add({
-        targets: hsText,
-        scale: 1.1,
-        duration: 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+      this.tweens.add({ targets: hs, alpha: 1, duration: 800, delay: 300 });
     }
 
-    // Difficulty buttons (with staggered entrance)
-    this.createDifficultyButton(width / 2, 300, 'EASY', '#4CAF50', 600);
-    this.createDifficultyButton(width / 2, 380, 'NORMAL', '#FF9800', 750);
-    this.createDifficultyButton(width / 2, 460, 'HARD', '#F44336', 900);
+    // ─── SELECT GAME ───────────────────────────────────
 
-    // Leaderboard button
-    this.createLeaderboardButton(width / 2, 530, 1000);
+    this.add.text(width / 2, 135, 'SELECT GAME', {
+      fontSize: '13px', color: '#8C8C8C', fontStyle: 'bold',
+    }).setOrigin(0.5);
 
-    // Settings button (top right)
-    this.createSettingsButton(width - 30, 30, 1050);
+    GAMES.forEach((game, i) => {
+      this.createGameCard(width / 2, 180 + i * 72, game, 400 + i * 150);
+    });
+
+    // ─── DIFFICULTY ────────────────────────────────────
+
+    this.add.text(width / 2, 405, 'DIFFICULTY', {
+      fontSize: '13px', color: '#8C8C8C', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const difficulties: { key: Difficulty; color: string }[] = [
+      { key: 'EASY', color: '#4CAF50' },
+      { key: 'NORMAL', color: '#FF9800' },
+      { key: 'HARD', color: '#F44336' },
+    ];
+
+    const diffBtnWidth = 90;
+    const totalDiffWidth = 3 * diffBtnWidth + 2 * 10;
+    const diffStartX = (width - totalDiffWidth) / 2 + diffBtnWidth / 2;
+
+    difficulties.forEach((d, i) => {
+      const x = diffStartX + i * (diffBtnWidth + 10);
+      this.createDifficultyChip(x, 435, d.key, d.color, 800 + i * 100);
+    });
+
+    // ─── PLAY BUTTON ───────────────────────────────────
+
+    const playBtn = this.add.text(width / 2, 495, 'PLAY', {
+      fontSize: '28px',
+      color: '#FFFFFF',
+      fontStyle: 'bold',
+      backgroundColor: '#FF4581',
+      padding: { x: 50, y: 14 },
+    }).setOrigin(0.5).setAlpha(0);
+
+    playBtn.setInteractive({ useHandCursor: true });
+    this.tweens.add({ targets: playBtn, alpha: 1, duration: 600, delay: 1100 });
+
+    playBtn.on('pointerover', () => {
+      playBtn.setScale(1.08);
+      playBtn.setStyle({ backgroundColor: '#E6366E' });
+    });
+    playBtn.on('pointerout', () => {
+      playBtn.setScale(1);
+      playBtn.setStyle({ backgroundColor: '#FF4581' });
+    });
+    playBtn.on('pointerdown', () => {
+      this.tweens.add({
+        targets: playBtn, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true,
+        onComplete: () => this.startSelectedGame(),
+      });
+    });
+
+    // ─── BOTTOM ROW ────────────────────────────────────
+
+    this.createLeaderboardButton(width / 2 - 70, 565, 1200);
+    this.createSettingsButton(width / 2 + 70, 565, 1200);
 
     // Instructions
-    const instructions = this.add.text(
-      width / 2,
-      600,
-      'Touch and hold to move\nRelease to freeze',
-      {
-        fontSize: '14px',
-        color: '#8C8C8C',
-        align: 'center',
-      }
-    );
-    instructions.setOrigin(0.5);
+    this.add.text(width / 2, 620, 'Mobile: Tap & hold  |  Desktop: SPACE', {
+      fontSize: '11px', color: '#AAAAAA',
+    }).setOrigin(0.5);
   }
 
-  private createLeaderboardButton(x: number, y: number, delay: number = 0): void {
-    const btn = this.add.text(x, y, 'LEADERBOARD', {
-      fontSize: '16px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-    });
-    btn.setOrigin(0.5);
-    btn.setAlpha(0);
-    btn.setInteractive({ useHandCursor: true });
+  // ─── Game Cards ──────────────────────────────────────
+
+  private createGameCard(x: number, y: number, game: GameOption, delay: number): void {
+    const cardW = 300;
+    const cardH = 56;
+
+    const bg = this.add.rectangle(x, y, cardW, cardH, 0xffffff);
+    bg.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(game.color).color);
+    bg.setAlpha(0);
+
+    const label = this.add.text(x, y - 8, game.label, {
+      fontSize: '16px', color: game.color, fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0);
+
+    const sub = this.add.text(x, y + 14, game.subtitle, {
+      fontSize: '11px', color: '#8C8C8C',
+    }).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({
-      targets: btn,
+      targets: [bg, label, sub],
       alpha: 1,
-      duration: 600,
+      duration: 500,
       delay,
+      ease: 'Power2',
     });
+
+    bg.setInteractive({ useHandCursor: true });
+
+    bg.on('pointerover', () => {
+      bg.setFillStyle(Phaser.Display.Color.HexStringToColor(game.color).color, 0.08);
+      this.tweens.add({ targets: [bg, label, sub], scaleX: 1.03, scaleY: 1.03, duration: 150 });
+    });
+    bg.on('pointerout', () => {
+      if (this.selectedGame.key !== game.key) bg.setFillStyle(0xffffff);
+      this.tweens.add({ targets: [bg, label, sub], scaleX: 1, scaleY: 1, duration: 150 });
+    });
+    bg.on('pointerdown', () => {
+      this.selectGame(game, bg);
+    });
+
+    if (game.key === this.selectedGame.key) {
+      bg.setFillStyle(Phaser.Display.Color.HexStringToColor(game.color).color, 0.12);
+      bg.setStrokeStyle(4, Phaser.Display.Color.HexStringToColor(game.color).color);
+    }
+  }
+
+  private selectGame(game: GameOption, bg: Phaser.GameObjects.Rectangle): void {
+    this.selectedGame = game;
+
+    bg.setStrokeStyle(4, Phaser.Display.Color.HexStringToColor(game.color).color);
+    bg.setFillStyle(Phaser.Display.Color.HexStringToColor(game.color).color, 0.12);
+  }
+
+  // ─── Difficulty Chips ────────────────────────────────
+
+  private createDifficultyChip(x: number, y: number, diff: Difficulty, color: string, delay: number): void {
+    const chipW = 90;
+    const chipH = 34;
+    const isSelected = diff === this.selectedDifficulty;
+    const colorNum = Phaser.Display.Color.HexStringToColor(color).color;
+
+    const bg = this.add.rectangle(x, y, chipW, chipH, isSelected ? colorNum : 0xffffff);
+    bg.setStrokeStyle(2, colorNum);
+    bg.setAlpha(0);
+
+    const text = this.add.text(x, y, diff, {
+      fontSize: '14px',
+      color: isSelected ? '#FFFFFF' : color,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0);
+
+    this.tweens.add({ targets: [bg, text], alpha: 1, duration: 400, delay });
+
+    this.difficultyButtons.set(diff, { bg, text });
+
+    bg.setInteractive({ useHandCursor: true });
+    bg.on('pointerdown', () => this.selectDifficulty(diff));
+  }
+
+  private selectDifficulty(diff: Difficulty): void {
+    this.selectedDifficulty = diff;
+
+    const colorMap: Record<Difficulty, string> = { EASY: '#4CAF50', NORMAL: '#FF9800', HARD: '#F44336' };
+
+    this.difficultyButtons.forEach((btn, key) => {
+      const c = colorMap[key];
+      const colorNum = Phaser.Display.Color.HexStringToColor(c).color;
+      if (key === diff) {
+        btn.bg.setFillStyle(colorNum);
+        btn.text.setColor('#FFFFFF');
+      } else {
+        btn.bg.setFillStyle(0xffffff);
+        btn.text.setColor(c);
+      }
+    });
+  }
+
+  // ─── Navigation ──────────────────────────────────────
+
+  private startSelectedGame(): void {
+    this.registry.set('difficulty', this.selectedDifficulty);
+
+    this.musicGenerator.stopMusic();
+    this.cameras.main.fadeOut(500);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start(this.selectedGame.scene);
+    });
+  }
+
+  private createLeaderboardButton(x: number, y: number, delay: number): void {
+    const btn = this.add.text(x, y, 'LEADERBOARD', {
+      fontSize: '13px', color: '#B8860B', fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0).setInteractive({ useHandCursor: true });
+
+    this.tweens.add({ targets: btn, alpha: 1, duration: 500, delay });
 
     btn.on('pointerover', () => btn.setScale(1.1));
     btn.on('pointerout', () => btn.setScale(1));
     btn.on('pointerdown', () => {
       this.musicGenerator.stopMusic();
       this.cameras.main.fadeOut(300);
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.start(SCENES.LEADERBOARD);
-      });
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(SCENES.LEADERBOARD));
     });
   }
 
-  private createSettingsButton(x: number, y: number, delay: number = 0): void {
-    // Settings icon (gear)
-    const gear = this.add.text(x, y, '⚙️', {
-      fontSize: '32px',
-    });
-    gear.setOrigin(0.5);
-    gear.setAlpha(0);
+  private createSettingsButton(x: number, y: number, delay: number): void {
+    const gear = this.add.text(x, y, '⚙️', { fontSize: '28px' }).setOrigin(0.5).setAlpha(0);
     gear.setInteractive({ useHandCursor: true });
 
-    // Entrance animation
-    this.tweens.add({
-      targets: gear,
-      alpha: 1,
-      duration: 600,
-      delay: delay,
-    });
+    this.tweens.add({ targets: gear, alpha: 1, duration: 500, delay });
 
-    // Hover effect - rotate
-    gear.on('pointerover', () => {
-      this.tweens.add({
-        targets: gear,
-        angle: 90,
-        scale: 1.2,
-        duration: 300,
-        ease: 'Back.easeOut',
-      });
-    });
-
-    gear.on('pointerout', () => {
-      this.tweens.add({
-        targets: gear,
-        angle: 0,
-        scale: 1,
-        duration: 300,
-      });
-    });
-
-    // Click handler
+    gear.on('pointerover', () => this.tweens.add({ targets: gear, angle: 90, scale: 1.2, duration: 300, ease: 'Back.easeOut' }));
+    gear.on('pointerout', () => this.tweens.add({ targets: gear, angle: 0, scale: 1, duration: 300 }));
     gear.on('pointerdown', () => {
-      this.tweens.add({
-        targets: gear,
-        angle: 180,
-        duration: 200,
-        onComplete: () => {
-          this.openSettings();
-        },
-      });
+      this.musicGenerator.stopMusic();
+      this.cameras.main.fadeOut(300);
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(SCENES.SETTINGS, { from: SCENES.MENU }));
     });
   }
 
@@ -248,116 +320,10 @@ export default class MenuScene extends Phaser.Scene {
     }
   }
 
-  private openSettings(): void {
-    // Stop music
-    this.musicGenerator.stopMusic();
-
-    // Fade out and open settings
-    this.cameras.main.fadeOut(300);
-    this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start(SCENES.SETTINGS, { from: SCENES.MENU });
-    });
-  }
-
-  private createDifficultyButton(
-    x: number,
-    y: number,
-    difficulty: Difficulty,
-    color: string,
-    delay: number = 0
-  ): void {
-    const width = 250;
-    const height = 60;
-
-    // Button background
-    const button = this.add.rectangle(x, y, width, height, 0xffffff);
-    button.setStrokeStyle(4, Phaser.Display.Color.HexStringToColor(color).color);
-    button.setAlpha(0);
-
-    // Button text
-    const text = this.add.text(x, y, difficulty, {
-      fontSize: '24px',
-      color: color,
-      fontStyle: 'bold',
-    });
-    text.setOrigin(0.5);
-    text.setAlpha(0);
-
-    // Entrance animation
-    this.tweens.add({
-      targets: [button, text],
-      alpha: 1,
-      x: x,
-      from: { x: x - 100 },
-      duration: 600,
-      delay: delay,
-      ease: 'Back.easeOut',
-    });
-
-    // Make interactive
-    button.setInteractive({ useHandCursor: true });
-
-    // Hover effect
-    button.on('pointerover', () => {
-      button.setFillStyle(Phaser.Display.Color.HexStringToColor(color).color, 0.1);
-      this.tweens.add({
-        targets: [button, text],
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 200,
-        ease: 'Back.easeOut',
-      });
-    });
-
-    button.on('pointerout', () => {
-      button.setFillStyle(0xffffff);
-      this.tweens.add({
-        targets: [button, text],
-        scaleX: 1,
-        scaleY: 1,
-        duration: 200,
-      });
-    });
-
-    // Click handler with animation
-    button.on('pointerdown', () => {
-      this.tweens.add({
-        targets: [button, text],
-        scaleX: 0.95,
-        scaleY: 0.95,
-        duration: 100,
-        yoyo: true,
-        onComplete: () => {
-          this.startGame(difficulty);
-        },
-      });
-    });
-  }
-
-  private startGame(difficulty: Difficulty): void {
-    console.log(`🎯 Starting game on ${difficulty} difficulty`);
-
-    // Save difficulty to registry
-    this.registry.set('difficulty', difficulty);
-
-    // Stop menu music
-    this.musicGenerator.stopMusic();
-
-    // Fade out and start game
-    this.cameras.main.fadeOut(500);
-
-    this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start(SCENES.GAME);
-    });
-  }
-
   shutdown(): void {
-    // Cleanup music
     if (this.musicGenerator) {
       this.musicGenerator.stopMusic();
     }
-
-    // Remove event listeners
     this.game.events.off('music-setting-changed', this.handleMusicSettingChanged, this);
   }
 }

@@ -13,6 +13,8 @@ import MenuScene from '../scenes/MenuScene';
 import SettingsScene from '../scenes/SettingsScene';
 import LeaderboardScene from '../scenes/LeaderboardScene';
 import GameScene from '../scenes/GameScene';
+import GlassBridgeScene from '../scenes/GlassBridgeScene';
+import TugOfWarScene from '../scenes/TugOfWarScene';
 import GameOverScene from '../scenes/GameOverScene';
 import VictoryScene from '../scenes/VictoryScene';
 
@@ -40,6 +42,8 @@ export const GAME_CONFIG: Phaser.Types.Core.GameConfig = {
     SettingsScene,
     LeaderboardScene,
     GameScene,
+    GlassBridgeScene,
+    TugOfWarScene,
     GameOverScene,
     VictoryScene,
   ],

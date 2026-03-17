@@ -5,6 +5,8 @@
 
 export type Difficulty = 'EASY' | 'NORMAL' | 'HARD';
 
+export type MiniGame = 'RED_LIGHT_GREEN_LIGHT' | 'GLASS_BRIDGE' | 'TUG_OF_WAR';
+
 export enum GameState {
   READY = 'READY',
   GREEN_LIGHT = 'GREEN_LIGHT',
