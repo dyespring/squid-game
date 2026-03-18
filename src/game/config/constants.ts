@@ -71,6 +71,7 @@ export const SCENES = {
   GAME: 'GameScene',
   GLASS_BRIDGE: 'GlassBridgeScene',
   TUG_OF_WAR: 'TugOfWarScene',
+  HONEYCOMB: 'HoneycombScene',
   GAME_OVER: 'GameOverScene',
   VICTORY: 'VictoryScene',
 } as const;

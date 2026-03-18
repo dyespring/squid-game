@@ -21,6 +21,7 @@ const GAMES: GameOption[] = [
   { key: 'rlgl', label: 'Red Light Green Light', subtitle: 'Hold to move, freeze on red', color: '#E63946', scene: SCENES.GAME },
   { key: 'glass', label: 'Glass Bridge', subtitle: 'Pick the safe panel', color: '#4488FF', scene: SCENES.GLASS_BRIDGE },
   { key: 'tug', label: 'Tug of War', subtitle: 'Tap to pull your team', color: '#FF9800', scene: SCENES.TUG_OF_WAR },
+  { key: 'honey', label: 'Honeycomb', subtitle: 'Trace the shape carefully', color: '#D4A030', scene: SCENES.HONEYCOMB },
 ];
 
 export default class MenuScene extends Phaser.Scene {
@@ -108,12 +109,12 @@ export default class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     GAMES.forEach((game, i) => {
-      this.createGameCard(width / 2, 180 + i * 72, game, 400 + i * 150);
+      this.createGameCard(width / 2, 172 + i * 60, game, 400 + i * 120);
     });
 
     // ─── DIFFICULTY ────────────────────────────────────
 
-    this.add.text(width / 2, 405, 'DIFFICULTY', {
+    this.add.text(width / 2, 420, 'DIFFICULTY', {
       fontSize: '13px', color: '#8C8C8C', fontStyle: 'bold',
     }).setOrigin(0.5);
 
@@ -129,12 +130,12 @@ export default class MenuScene extends Phaser.Scene {
 
     difficulties.forEach((d, i) => {
       const x = diffStartX + i * (diffBtnWidth + 10);
-      this.createDifficultyChip(x, 435, d.key, d.color, 800 + i * 100);
+      this.createDifficultyChip(x, 450, d.key, d.color, 800 + i * 100);
     });
 
     // ─── PLAY BUTTON ───────────────────────────────────
 
-    const playBtn = this.add.text(width / 2, 495, 'PLAY', {
+    const playBtn = this.add.text(width / 2, 510, 'PLAY', {
       fontSize: '28px',
       color: '#FFFFFF',
       fontStyle: 'bold',
@@ -162,8 +163,8 @@ export default class MenuScene extends Phaser.Scene {
 
     // ─── BOTTOM ROW ────────────────────────────────────
 
-    this.createLeaderboardButton(width / 2 - 70, 565, 1200);
-    this.createSettingsButton(width / 2 + 70, 565, 1200);
+    this.createLeaderboardButton(width / 2 - 70, 575, 1200);
+    this.createSettingsButton(width / 2 + 70, 575, 1200);
 
     // Instructions
     this.add.text(width / 2, 620, 'Mobile: Tap & hold  |  Desktop: SPACE', {
@@ -175,7 +176,7 @@ export default class MenuScene extends Phaser.Scene {
 
   private createGameCard(x: number, y: number, game: GameOption, delay: number): void {
     const cardW = 300;
-    const cardH = 56;
+    const cardH = 48;
 
     const bg = this.add.rectangle(x, y, cardW, cardH, 0xffffff);
     bg.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(game.color).color);
