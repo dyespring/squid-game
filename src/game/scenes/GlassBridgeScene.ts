@@ -75,11 +75,8 @@ export default class GlassBridgeScene extends Phaser.Scene {
     this.npcRunners = [];
 
     this.soundGenerator = new SoundGenerator();
-    this.musicGenerator = new MusicGenerator();
+    this.musicGenerator = MusicGenerator.getInstance();
     this.particleManager = new ParticleManager(this);
-
-    const musicEnabled = this.registry.get('musicEnabled') ?? true;
-    if (musicEnabled) this.musicGenerator.playBridgeMusic();
 
     this.cameras.main.fadeIn(500);
 
@@ -448,6 +445,8 @@ export default class GlassBridgeScene extends Phaser.Scene {
           this.time.delayedCall(500, () => {
             countText.destroy();
             this.isGameActive = true;
+            const musicEnabled = this.registry.get('musicEnabled') ?? true;
+            if (musicEnabled) this.musicGenerator.playBridgeMusic();
             this.enableRowInput(0);
           });
         }

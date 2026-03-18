@@ -43,7 +43,7 @@ export default class MenuScene extends Phaser.Scene {
 
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
 
-    this.musicGenerator = new MusicGenerator();
+    this.musicGenerator = MusicGenerator.getInstance();
     this.soundGenerator = new SoundGenerator();
     this.highScoreManager = new HighScoreManager();
 

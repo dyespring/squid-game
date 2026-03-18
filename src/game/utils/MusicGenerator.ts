@@ -1,10 +1,12 @@
 /**
- * Music Generator
- * Creates procedural atmospheric music using Web Audio API
- * Inspired by tension and suspense without copying copyrighted material
+ * Music Generator (Singleton)
+ * Single shared AudioContext across all scenes to avoid browser
+ * suspension of contexts created without user gesture.
  */
 
 export default class MusicGenerator {
+  private static instance: MusicGenerator | null = null;
+
   private audioContext: AudioContext | null = null;
   private isPlaying: boolean = false;
   private masterGain: GainNode | null = null;
@@ -12,12 +14,29 @@ export default class MusicGenerator {
   private musicType: string = 'menu';
   private intervalId: number | null = null;
 
-  constructor() {
+  private constructor() {
     if (typeof window !== 'undefined') {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.audioContext.createGain();
-      this.masterGain.gain.value = 0.3; // Lower volume for background music
+      this.masterGain.gain.value = 0.3;
       this.masterGain.connect(this.audioContext.destination);
+    }
+  }
+
+  static getInstance(): MusicGenerator {
+    if (!MusicGenerator.instance) {
+      MusicGenerator.instance = new MusicGenerator();
+    }
+    return MusicGenerator.instance;
+  }
+
+  /**
+   * Resume AudioContext if suspended (browsers require user gesture).
+   * Call this from any play method to ensure audio actually starts.
+   */
+  private async ensureContext(): Promise<void> {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
     }
   }
 
@@ -36,6 +55,7 @@ export default class MusicGenerator {
   playMenuMusic(): void {
     this.stopMusic();
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
 
     this.musicType = 'menu';
     this.isPlaying = true;
@@ -115,6 +135,7 @@ export default class MusicGenerator {
   playGameplayMusic(): void {
     this.stopMusic();
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
 
     this.musicType = 'gameplay';
     this.isPlaying = true;
@@ -321,6 +342,7 @@ export default class MusicGenerator {
   playBridgeMusic(): void {
     this.stopMusic();
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
 
     this.musicType = 'bridge';
     this.isPlaying = true;
@@ -381,6 +403,7 @@ export default class MusicGenerator {
   playTugMusic(): void {
     this.stopMusic();
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
 
     this.musicType = 'tug';
     this.isPlaying = true;
@@ -445,6 +468,7 @@ export default class MusicGenerator {
   playHoneycombMusic(): void {
     this.stopMusic();
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
 
     this.musicType = 'honeycomb';
     this.isPlaying = true;
@@ -498,6 +522,7 @@ export default class MusicGenerator {
    */
   playVictoryStinger(): void {
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
     const ctx = this.audioContext;
     const now = ctx.currentTime;
 
@@ -522,6 +547,7 @@ export default class MusicGenerator {
    */
   playGameOverStinger(): void {
     if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
     const ctx = this.audioContext;
     const now = ctx.currentTime;
 
@@ -545,14 +571,4 @@ export default class MusicGenerator {
     });
   }
 
-  /**
-   * Cleanup
-   */
-  destroy(): void {
-    this.stopMusic();
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-  }
 }

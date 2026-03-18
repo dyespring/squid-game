@@ -22,7 +22,8 @@ export default class VictoryScene extends Phaser.Scene {
   create(): void {
     console.log('🎉 VictoryScene');
     this.soundGenerator = new SoundGenerator();
-    this.musicGenerator = new MusicGenerator();
+    this.musicGenerator = MusicGenerator.getInstance();
+    this.musicGenerator.stopMusic();
     this.soundGenerator.playVictory();
     this.musicGenerator.playVictoryStinger();
 

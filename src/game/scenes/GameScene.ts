@@ -81,7 +81,7 @@ export default class GameScene extends Phaser.Scene {
     this.doll = new Doll(this, width / 2, 80, config);
 
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
-    this.musicGenerator = new MusicGenerator();
+    this.musicGenerator = MusicGenerator.getInstance();
 
     // Create systems
     this.inputManager = new InputManager(this);

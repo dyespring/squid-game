@@ -76,11 +76,8 @@ export default class TugOfWarScene extends Phaser.Scene {
     this.aiTeam = [];
 
     this.soundGenerator = new SoundGenerator();
-    this.musicGenerator = new MusicGenerator();
+    this.musicGenerator = MusicGenerator.getInstance();
     this.cameras.main.fadeIn(500);
-
-    const musicEnabled = this.registry.get('musicEnabled') ?? true;
-    if (musicEnabled) this.musicGenerator.playTugMusic();
 
     // Background — arena with gradient ground and crowd silhouettes
     const bgGfx = this.add.graphics().setDepth(-2);
@@ -431,6 +428,8 @@ export default class TugOfWarScene extends Phaser.Scene {
           this.time.delayedCall(500, () => {
             countText.destroy();
             this.isGameActive = true;
+            const musicEnabled = this.registry.get('musicEnabled') ?? true;
+            if (musicEnabled) this.musicGenerator.playTugMusic();
           });
         }
       },

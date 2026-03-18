@@ -32,7 +32,8 @@ export default class GameOverScene extends Phaser.Scene {
     const difficulty = data?.difficulty ?? 'NORMAL';
 
     this.soundGenerator = new SoundGenerator();
-    const musicGenerator = new MusicGenerator();
+    const musicGenerator = MusicGenerator.getInstance();
+    musicGenerator.stopMusic();
     this.soundGenerator.playEliminationDramatic();
     musicGenerator.playGameOverStinger();
     this.statIndex = 0;

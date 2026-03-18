@@ -81,12 +81,9 @@ export default class HoneycombScene extends Phaser.Scene {
     this.lastPointer = null;
 
     this.soundGenerator = new SoundGenerator();
-    this.musicGenerator = new MusicGenerator();
+    this.musicGenerator = MusicGenerator.getInstance();
     this.particleManager = new ParticleManager(this);
     this.cameras.main.fadeIn(500);
-
-    const musicEnabled = this.registry.get('musicEnabled') ?? true;
-    if (musicEnabled) this.musicGenerator.playHoneycombMusic();
 
     this.cookieCenterX = width / 2;
     this.cookieCenterY = height / 2 - 20;
@@ -516,6 +513,8 @@ export default class HoneycombScene extends Phaser.Scene {
           this.time.delayedCall(500, () => {
             countText.destroy();
             this.isGameActive = true;
+            const musicEnabled = this.registry.get('musicEnabled') ?? true;
+            if (musicEnabled) this.musicGenerator.playHoneycombMusic();
           });
         }
       },
