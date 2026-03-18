@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import { SCENES, COLORS } from '../config/constants';
 import type { Difficulty } from '@/types/game.types';
 import MusicGenerator from '../utils/MusicGenerator';
+import SoundGenerator from '../utils/SoundGenerator';
 import { HighScoreManager } from '../managers/HighScoreManager';
 
 interface GameOption {
@@ -26,6 +27,7 @@ const GAMES: GameOption[] = [
 
 export default class MenuScene extends Phaser.Scene {
   private musicGenerator!: MusicGenerator;
+  private soundGenerator!: SoundGenerator;
   private highScoreManager!: HighScoreManager;
   private musicEnabled: boolean = true;
   private selectedGame: GameOption = GAMES[0];
@@ -42,6 +44,7 @@ export default class MenuScene extends Phaser.Scene {
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
 
     this.musicGenerator = new MusicGenerator();
+    this.soundGenerator = new SoundGenerator();
     this.highScoreManager = new HighScoreManager();
 
     if (this.musicEnabled) {
@@ -52,8 +55,46 @@ export default class MenuScene extends Phaser.Scene {
 
     this.cameras.main.fadeIn(500);
 
-    // Background
-    this.add.rectangle(width / 2, height / 2, width, height, COLORS.BACKGROUND_CREAM);
+    // Background gradient
+    const bgGfx = this.add.graphics().setDepth(-2);
+    for (let i = 0; i < 15; i++) {
+      const t = i / 15;
+      const r = Math.floor(0xf5 - t * 0x10);
+      const g = Math.floor(0xe6 - t * 0x10);
+      const b = Math.floor(0xd3 - t * 0x10);
+      bgGfx.fillStyle((r << 16) | (g << 8) | b, 1);
+      bgGfx.fillRect(0, (i / 15) * height, width, height / 15 + 1);
+    }
+
+    // Floating Squid Game motif symbols (circle, triangle, square)
+    const shapes = [
+      { type: 'circle', x: 50, y: 150, r: 15 },
+      { type: 'triangle', x: width - 60, y: 200, r: 16 },
+      { type: 'square', x: 70, y: 400, r: 12 },
+      { type: 'circle', x: width - 50, y: 500, r: 10 },
+      { type: 'triangle', x: 40, y: 580, r: 12 },
+      { type: 'square', x: width - 70, y: 380, r: 14 },
+    ];
+    shapes.forEach((s) => {
+      const sg = this.add.graphics().setDepth(-1).setAlpha(0.08);
+      sg.lineStyle(2, COLORS.SQUID_PINK, 1);
+      if (s.type === 'circle') {
+        sg.strokeCircle(s.x, s.y, s.r);
+      } else if (s.type === 'triangle') {
+        sg.strokeTriangle(s.x, s.y - s.r, s.x - s.r, s.y + s.r, s.x + s.r, s.y + s.r);
+      } else {
+        sg.strokeRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+      }
+      this.tweens.add({
+        targets: sg,
+        y: sg.y - 15,
+        duration: 3000 + Math.random() * 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: Math.random() * 2000,
+      });
+    });
 
     // Title
     const title = this.add.text(width / 2, 60, 'SQUID GAME', {
@@ -154,7 +195,9 @@ export default class MenuScene extends Phaser.Scene {
       playBtn.setScale(1);
       playBtn.setStyle({ backgroundColor: '#FF4581' });
     });
+    playBtn.on('pointerover', () => this.soundGenerator.playUIHover());
     playBtn.on('pointerdown', () => {
+      this.soundGenerator.playUIClick();
       this.tweens.add({
         targets: playBtn, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true,
         onComplete: () => this.startSelectedGame(),
@@ -209,6 +252,7 @@ export default class MenuScene extends Phaser.Scene {
       this.tweens.add({ targets: [bg, label, sub], scaleX: 1, scaleY: 1, duration: 150 });
     });
     bg.on('pointerdown', () => {
+      this.soundGenerator.playUIClick();
       this.selectGame(game, bg);
     });
 
@@ -248,7 +292,7 @@ export default class MenuScene extends Phaser.Scene {
     this.difficultyButtons.set(diff, { bg, text });
 
     bg.setInteractive({ useHandCursor: true });
-    bg.on('pointerdown', () => this.selectDifficulty(diff));
+    bg.on('pointerdown', () => { this.soundGenerator.playUIClick(); this.selectDifficulty(diff); });
   }
 
   private selectDifficulty(diff: Difficulty): void {

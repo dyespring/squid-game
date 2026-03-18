@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 import { SCENES, COLORS } from '../config/constants';
 import type { Difficulty } from '@/types/game.types';
 import SoundGenerator from '../utils/SoundGenerator';
+import MusicGenerator from '../utils/MusicGenerator';
 
 const DIFFICULTY_CONFIG = {
   EASY:   { aiStrength: 0.55, timeLimit: 30, staminaDrain: 0.6, staminaRegen: 8 },
@@ -27,6 +28,7 @@ export default class TugOfWarScene extends Phaser.Scene {
   private timeRemaining: number = 0;
   private isGameActive: boolean = false;
   private soundGenerator!: SoundGenerator;
+  private musicGenerator!: MusicGenerator;
 
   // UI elements
   private ropeGraphics!: Phaser.GameObjects.Graphics;
@@ -74,10 +76,35 @@ export default class TugOfWarScene extends Phaser.Scene {
     this.aiTeam = [];
 
     this.soundGenerator = new SoundGenerator();
+    this.musicGenerator = new MusicGenerator();
     this.cameras.main.fadeIn(500);
 
-    // Background — arena ground
-    this.add.rectangle(width / 2, height / 2, width, height, 0x2d2d1f);
+    const musicEnabled = this.registry.get('musicEnabled') ?? true;
+    if (musicEnabled) this.musicGenerator.playTugMusic();
+
+    // Background — arena with gradient ground and crowd silhouettes
+    const bgGfx = this.add.graphics().setDepth(-2);
+    for (let i = 0; i < 12; i++) {
+      const t = i / 12;
+      const r = Math.floor(0x1a + t * 0x1a);
+      const g = Math.floor(0x1a + t * 0x18);
+      const b = Math.floor(0x10 + t * 0x10);
+      bgGfx.fillStyle((r << 16) | (g << 8) | b, 1);
+      bgGfx.fillRect(0, (i / 12) * height, width, height / 12 + 1);
+    }
+
+    // Crowd silhouettes along top edge
+    bgGfx.fillStyle(0x111108, 0.6);
+    for (let i = 0; i < 20; i++) {
+      const cx = (width / 20) * i + width / 40;
+      const cr = 8 + Math.random() * 6;
+      bgGfx.fillCircle(cx, 20 + Math.random() * 10, cr);
+      bgGfx.fillRect(cx - cr * 0.5, 20 + cr * 0.6, cr, cr * 1.2);
+    }
+
+    // Dramatic overhead light cone
+    bgGfx.fillStyle(0xffee88, 0.04);
+    bgGfx.fillTriangle(width / 2, 0, width / 2 - 120, height, width / 2 + 120, height);
 
     // Pit zone (center danger zone)
     this.add.rectangle(width / 2, ROPE_CENTER_Y + 50, 80, 8, COLORS.DANGER_RED, 0.5);
@@ -262,7 +289,14 @@ export default class TugOfWarScene extends Phaser.Scene {
       if (this.tapZone?.active) this.tapZone.setFillStyle(COLORS.TRACKSUIT_GREEN, 0.15);
     });
 
-    this.soundGenerator.playFootstep(0.15);
+    this.soundGenerator.playRopeStrain(0.15);
+
+    // Screen edge pulse on strong rhythm
+    if (this.rhythmMultiplier > 1.3) {
+      const { height: sh } = this.cameras.main;
+      const edge = this.add.rectangle(0, sh / 2, 4, sh, COLORS.TRACKSUIT_GREEN, 0.4).setOrigin(0, 0.5).setDepth(50);
+      this.tweens.add({ targets: edge, alpha: 0, duration: 200, onComplete: () => edge.destroy() });
+    }
   }
 
   // ─── Visuals ─────────────────────────────────────────
@@ -292,9 +326,17 @@ export default class TugOfWarScene extends Phaser.Scene {
 
   private updateTeamPositions(): void {
     const offset = (this.ropePosition / WIN_THRESHOLD) * 30;
-    this.playerTeam.forEach((m, i) => { m.x = 30 + i * 22 - offset; });
+    const leanAngle = (this.ropePosition / WIN_THRESHOLD) * 15;
+
+    this.playerTeam.forEach((m, i) => {
+      m.x = 30 + i * 22 - offset;
+      m.angle = -leanAngle;
+    });
     const w = this.cameras.main.width;
-    this.aiTeam.forEach((m, i) => { m.x = w - 30 - i * 22 - offset; });
+    this.aiTeam.forEach((m, i) => {
+      m.x = w - 30 - i * 22 - offset;
+      m.angle = leanAngle;
+    });
   }
 
   private updateRopeVisuals(): void {
@@ -303,19 +345,36 @@ export default class TugOfWarScene extends Phaser.Scene {
     g.clear();
 
     const offset = (this.ropePosition / WIN_THRESHOLD) * (width / 2 - 60);
+    const jitter = this.isGameActive ? (Math.random() - 0.5) * 2 : 0;
 
-    g.lineStyle(6, 0x8b6914, 1);
+    // Rope shadow
+    g.lineStyle(8, 0x000000, 0.15);
     g.beginPath();
-    g.moveTo(30 - offset * 0.3, ROPE_CENTER_Y);
-    g.lineTo(width - 30 - offset * 0.3, ROPE_CENTER_Y);
+    g.moveTo(30 - offset * 0.3, ROPE_CENTER_Y + 3);
+    g.lineTo(width - 30 - offset * 0.3, ROPE_CENTER_Y + 3);
+    g.strokePath();
+
+    // Main rope with fibrous texture
+    g.lineStyle(7, 0x8b6914, 1);
+    g.beginPath();
+    g.moveTo(30 - offset * 0.3, ROPE_CENTER_Y + jitter);
+    g.lineTo(width - 30 - offset * 0.3, ROPE_CENTER_Y + jitter);
+    g.strokePath();
+
+    // Highlight strand
+    g.lineStyle(2, 0xb08f30, 0.5);
+    g.beginPath();
+    g.moveTo(30 - offset * 0.3, ROPE_CENTER_Y - 2 + jitter);
+    g.lineTo(width - 30 - offset * 0.3, ROPE_CENTER_Y - 2 + jitter);
     g.strokePath();
 
     // Knot marks
     for (let i = 0; i < 5; i++) {
       const kx = 80 + i * 50 - offset * 0.3;
-      g.lineStyle(3, 0x6b4f10, 1);
       g.fillStyle(0x6b4f10, 1);
-      g.fillCircle(kx, ROPE_CENTER_Y, 4);
+      g.fillCircle(kx, ROPE_CENTER_Y + jitter, 5);
+      g.lineStyle(1, 0x5a4010, 1);
+      g.strokeCircle(kx, ROPE_CENTER_Y + jitter, 5);
     }
 
     this.markerDot.x = width / 2 + offset;
@@ -378,6 +437,7 @@ export default class TugOfWarScene extends Phaser.Scene {
       repeat: 2,
     });
     this.soundGenerator.playCountdown();
+    this.soundGenerator.playGameStart();
   }
 
   private handleVictory(): void {
@@ -402,6 +462,20 @@ export default class TugOfWarScene extends Phaser.Scene {
     });
 
     this.soundGenerator.playVictory();
+    this.soundGenerator.playCrowdCheer();
+
+    // Team celebration — members jump
+    this.playerTeam.forEach((m, i) => {
+      this.tweens.add({
+        targets: m,
+        y: m.y - 20,
+        duration: 250,
+        yoyo: true,
+        repeat: 2,
+        delay: i * 80,
+        ease: 'Quad.easeOut',
+      });
+    });
 
     const { width } = this.cameras.main;
     this.add.text(width / 2, ROPE_CENTER_Y - 60, 'YOU WIN!', {
@@ -428,7 +502,7 @@ export default class TugOfWarScene extends Phaser.Scene {
       timeLimit: cfg.timeLimit,
     });
 
-    this.soundGenerator.playGunshot();
+    this.soundGenerator.playEliminationDramatic();
     this.cameras.main.shake(500, 0.02);
 
     const { width } = this.cameras.main;
@@ -494,6 +568,7 @@ export default class TugOfWarScene extends Phaser.Scene {
 
   shutdown(): void {
     this.isPaused = false;
+    this.musicGenerator?.stopMusic();
     this.input.keyboard?.off('keydown-SPACE');
     this.input.keyboard?.off('keydown-ESC');
   }

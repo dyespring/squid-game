@@ -23,10 +23,6 @@ export default class Doll extends Phaser.GameObjects.Container {
   private currentState: DollState = DollState.FACING_AWAY;
   private stateTimer: number = 0;
   private config: DifficultyConfig;
-  private leftPigtail: Phaser.GameObjects.Arc;
-  private rightPigtail: Phaser.GameObjects.Arc;
-  private dress: Phaser.GameObjects.Graphics;
-  private arms: Phaser.GameObjects.Graphics;
   private fakeTurnCooldown: number = 0;
   private isCycleStopped: boolean = false;
 
@@ -34,101 +30,144 @@ export default class Doll extends Phaser.GameObjects.Container {
 
   constructor(scene: Phaser.Scene, x: number, y: number, config: DifficultyConfig) {
     super(scene, x, y);
-
     this.config = config;
 
-    // Create visual representation - improved doll
     this.bodySprite = scene.add.container(0, 0);
 
-    // Dress (trapezoid shape)
-    this.dress = scene.add.graphics();
-    this.dress.fillStyle(0xFF6B9D, 1); // Pink dress
-    this.dress.fillTriangle(-35, 15, 35, 15, 40, 65);
-    this.dress.fillTriangle(-35, 15, -40, 65, 40, 65);
-    this.dress.lineStyle(3, 0xFF4581, 1);
-    this.dress.strokeTriangle(-35, 15, 35, 15, 40, 65);
-    this.dress.strokeTriangle(-35, 15, -40, 65, 40, 65);
-    // Add white collar
-    this.dress.fillStyle(0xFFFFFF, 1);
-    this.dress.fillRect(-25, 10, 50, 8);
-    this.dress.lineStyle(2, 0xFFCCDD, 1);
-    this.dress.strokeRect(-25, 10, 50, 8);
-    this.bodySprite.add(this.dress);
+    const dressGfx = scene.add.graphics();
 
-    // Arms
-    this.arms = scene.add.graphics();
-    this.arms.fillStyle(0xFFCCCC, 1); // Skin color
+    // Layered dress body
+    dressGfx.fillStyle(0xFF6B9D, 1);
+    dressGfx.fillTriangle(-35, 15, 35, 15, 42, 68);
+    dressGfx.fillTriangle(-35, 15, -42, 68, 42, 68);
+
+    // Dress overlay pattern (darker stripe)
+    dressGfx.fillStyle(0xF05888, 0.4);
+    dressGfx.fillTriangle(-20, 30, 20, 30, 25, 68);
+    dressGfx.fillTriangle(-20, 30, -25, 68, 25, 68);
+
+    // Dress outline
+    dressGfx.lineStyle(3, 0xFF4581, 1);
+    dressGfx.strokeTriangle(-35, 15, 35, 15, 42, 68);
+    dressGfx.strokeTriangle(-35, 15, -42, 68, 42, 68);
+
+    // Scalloped hem — decorative arcs along the bottom
+    dressGfx.lineStyle(2, 0xFFFFFF, 0.5);
+    for (let i = 0; i < 6; i++) {
+      const sx = -38 + i * 16;
+      dressGfx.beginPath();
+      dressGfx.arc(sx + 8, 68, 8, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false);
+      dressGfx.strokePath();
+    }
+
+    // White collar with rounded shape
+    dressGfx.fillStyle(0xFFFFFF, 1);
+    dressGfx.fillRoundedRect(-28, 8, 56, 12, 4);
+    dressGfx.lineStyle(2, 0xFFDDEE, 1);
+    dressGfx.strokeRoundedRect(-28, 8, 56, 12, 4);
+    // Collar ribbon
+    dressGfx.fillStyle(0xFF4581, 1);
+    dressGfx.fillTriangle(-4, 12, 4, 12, 0, 22);
+
+    this.bodySprite.add(dressGfx);
+
+    // Arms with hands
+    const armsGfx = scene.add.graphics();
     // Left arm
-    this.arms.fillRect(-45, 20, 12, 35);
-    this.arms.lineStyle(2, 0xFFAAAA, 1);
-    this.arms.strokeRect(-45, 20, 12, 35);
+    armsGfx.fillStyle(0xFFCCCC, 1);
+    armsGfx.fillRoundedRect(-48, 20, 14, 36, 5);
+    armsGfx.lineStyle(2, 0xFFAAAA, 1);
+    armsGfx.strokeRoundedRect(-48, 20, 14, 36, 5);
+    armsGfx.fillStyle(0xFFDDCC, 1);
+    armsGfx.fillCircle(-41, 58, 6);
     // Right arm
-    this.arms.fillStyle(0xFFCCCC, 1);
-    this.arms.fillRect(33, 20, 12, 35);
-    this.arms.lineStyle(2, 0xFFAAAA, 1);
-    this.arms.strokeRect(33, 20, 12, 35);
-    this.bodySprite.add(this.arms);
+    armsGfx.fillStyle(0xFFCCCC, 1);
+    armsGfx.fillRoundedRect(34, 20, 14, 36, 5);
+    armsGfx.lineStyle(2, 0xFFAAAA, 1);
+    armsGfx.strokeRoundedRect(34, 20, 14, 36, 5);
+    armsGfx.fillStyle(0xFFDDCC, 1);
+    armsGfx.fillCircle(41, 58, 6);
+    this.bodySprite.add(armsGfx);
 
     this.add(this.bodySprite);
 
-    // Head - larger
-    this.head = scene.add.arc(0, -25, 35, 0, 360, false, 0xFFDDCC);
+    // Head
+    this.head = scene.add.arc(0, -25, 36, 0, 360, false, 0xFFDDCC);
     this.head.setStrokeStyle(3, 0xFFCCBB);
     this.add(this.head);
 
-    // Pigtails
-    this.leftPigtail = scene.add.arc(-25, -30, 15, 0, 360, false, 0x8B4513);
-    this.leftPigtail.setStrokeStyle(2, 0x654321);
-    this.add(this.leftPigtail);
+    // Hair band
+    const bandGfx = scene.add.graphics();
+    bandGfx.fillStyle(0xFF4581, 1);
+    bandGfx.fillRoundedRect(-20, -50, 40, 6, 3);
+    this.add(bandGfx);
 
-    this.rightPigtail = scene.add.arc(25, -30, 15, 0, 360, false, 0x8B4513);
-    this.rightPigtail.setStrokeStyle(2, 0x654321);
-    this.add(this.rightPigtail);
+    // Pigtails — larger with gradient feel
+    const leftPig = scene.add.graphics();
+    leftPig.fillStyle(0x8B4513, 1);
+    leftPig.fillCircle(-28, -30, 16);
+    leftPig.fillStyle(0x7A3B10, 1);
+    leftPig.fillCircle(-28, -26, 10);
+    leftPig.lineStyle(2, 0x654321, 1);
+    leftPig.strokeCircle(-28, -30, 16);
+    this.add(leftPig);
+
+    const rightPig = scene.add.graphics();
+    rightPig.fillStyle(0x8B4513, 1);
+    rightPig.fillCircle(28, -30, 16);
+    rightPig.fillStyle(0x7A3B10, 1);
+    rightPig.fillCircle(28, -26, 10);
+    rightPig.lineStyle(2, 0x654321, 1);
+    rightPig.strokeCircle(28, -30, 16);
+    this.add(rightPig);
 
     // Hair top
-    const hairTop = scene.add.arc(0, -45, 20, 180 * Math.PI / 180, 0, true, 0x8B4513);
+    const hairTop = scene.add.arc(0, -45, 22, Phaser.Math.DegToRad(180), 0, true, 0x8B4513);
     hairTop.setStrokeStyle(2, 0x654321);
     this.add(hairTop);
 
     // Eye glow (hidden initially)
-    this.eyeGlow = scene.add.arc(0, -28, 18, 0, 360, false, COLORS.DANGER_RED, 0);
+    this.eyeGlow = scene.add.arc(0, -28, 20, 0, 360, false, COLORS.DANGER_RED, 0);
     this.add(this.eyeGlow);
 
-    // Eyes (will be red when facing players)
+    // Eyes with iris detail
     this.eyes = scene.add.group();
-    const leftEye = scene.add.arc(-12, -28, 6, 0, 360, false, COLORS.GEOMETRIC_BLACK);
-    leftEye.setStrokeStyle(1, 0x000000);
-    const rightEye = scene.add.arc(12, -28, 6, 0, 360, false, COLORS.GEOMETRIC_BLACK);
-    rightEye.setStrokeStyle(1, 0x000000);
-    this.add(leftEye);
-    this.add(rightEye);
-    this.eyes.add(leftEye);
-    this.eyes.add(rightEye);
+    [-12, 12].forEach(ex => {
+      const eyeWhite = scene.add.arc(ex, -28, 7, 0, 360, false, 0xFFFFFF);
+      eyeWhite.setStrokeStyle(1.5, 0xcccccc);
+      this.add(eyeWhite);
 
-    // Smile (simple arc)
-    const smile = scene.add.arc(0, -15, 10, 0, Math.PI, false);
-    smile.setStrokeStyle(2, 0xFF6B9D, 1);
-    smile.isFilled = false;
-    this.add(smile);
+      const iris = scene.add.arc(ex, -28, 4, 0, 360, false, COLORS.GEOMETRIC_BLACK);
+      iris.setStrokeStyle(1, 0x000000);
+      this.add(iris);
+      this.eyes.add(iris);
 
-    // Rosy cheeks
-    const leftCheek = scene.add.arc(-18, -20, 8, 0, 360, false, 0xFFB6C1, 0.4);
-    const rightCheek = scene.add.arc(18, -20, 8, 0, 360, false, 0xFFB6C1, 0.4);
-    this.add(leftCheek);
-    this.add(rightCheek);
+      const pupilHighlight = scene.add.arc(ex + 1.5, -29.5, 1.5, 0, 360, false, 0xFFFFFF, 0.8);
+      this.add(pupilHighlight);
+    });
 
-    // Add to scene
+    // Smile
+    const smileGfx = scene.add.graphics();
+    smileGfx.lineStyle(2.5, 0xFF6B9D, 1);
+    smileGfx.beginPath();
+    smileGfx.arc(0, -15, 12, Phaser.Math.DegToRad(10), Phaser.Math.DegToRad(170), false);
+    smileGfx.strokePath();
+    this.add(smileGfx);
+
+    // Rosy cheeks with gradient
+    const cheekGfx = scene.add.graphics();
+    cheekGfx.fillStyle(0xFFB6C1, 0.5);
+    cheekGfx.fillCircle(-20, -19, 9);
+    cheekGfx.fillCircle(20, -19, 9);
+    cheekGfx.fillStyle(0xFFB6C1, 0.25);
+    cheekGfx.fillCircle(-20, -19, 12);
+    cheekGfx.fillCircle(20, -19, 12);
+    this.add(cheekGfx);
+
     scene.add.existing(this);
-
-    // Start in facing away state
-    this.angle = 180; // Face away initially
-
-    console.log('🎎 Doll created');
+    this.angle = 180;
   }
 
-  /**
-   * Update doll state machine
-   */
   update(_time: number, delta: number): void {
     this.stateTimer -= delta;
 
@@ -143,64 +182,43 @@ export default class Doll extends Phaser.GameObjects.Container {
           }
         }
         break;
-
       case DollState.TURNING_TO_FACE:
-        // Animation handled by tween
+      case DollState.TURNING_AWAY:
         break;
-
       case DollState.FACING_PLAYERS:
         if (this.stateTimer <= 0) {
           this.startTurningAway();
         }
         break;
-
-      case DollState.TURNING_AWAY:
-        // Animation handled by tween
-        break;
     }
   }
 
-  /**
-   * Start a new cycle - doll faces away (green light)
-   */
   startFacingAway(): void {
     this.currentState = DollState.FACING_AWAY;
     this.isFacingPlayers = false;
 
-    // Random duration for green light
     const [min, max] = this.config.greenLightDuration;
     this.stateTimer = Phaser.Math.Between(min, max);
 
-    // Visual feedback
     this.eyes.getChildren().forEach((eye) => {
       (eye as Phaser.GameObjects.Arc).setFillStyle(COLORS.GEOMETRIC_BLACK);
     });
 
-    // Remove eye glow
     this.scene.tweens.add({
       targets: this.eyeGlow,
       alpha: 0,
       duration: 200,
     });
 
-    // Remove scan laser if it exists
     if (this.scanLaser) {
       this.scanLaser.destroy();
       this.scanLaser = null;
     }
 
     this.fakeTurnCooldown = Phaser.Math.Between(1500, 3000);
-
-    console.log(`🟢 GREEN LIGHT for ${(this.stateTimer / 1000).toFixed(1)}s`);
-
-    // Emit event
     this.scene.events.emit('doll-green-light', { duration: this.stateTimer });
   }
 
-  /**
-   * Attempt a fake turn (psych-out) during green light on HARD.
-   * The doll starts rotating toward players but snaps back.
-   */
   private attemptFakeTurn(): void {
     if (Math.random() > 0.35) {
       this.fakeTurnCooldown = Phaser.Math.Between(2000, 4000);
@@ -208,11 +226,9 @@ export default class Doll extends Phaser.GameObjects.Container {
     }
 
     this.fakeTurnCooldown = Phaser.Math.Between(3000, 5000);
-
     this.scene.events.emit('doll-turning-to-face');
 
     const partialAngle = 180 - Phaser.Math.Between(30, 70);
-
     this.scene.tweens.add({
       targets: this,
       angle: partialAngle,
@@ -234,15 +250,9 @@ export default class Doll extends Phaser.GameObjects.Container {
     });
   }
 
-  /**
-   * Start turning to face players (transition to red light)
-   */
   private startTurningToFace(): void {
     this.currentState = DollState.TURNING_TO_FACE;
 
-    console.log('🔄 Doll turning to face...');
-
-    // Pulse body during turn
     this.scene.tweens.add({
       targets: this.bodySprite,
       scaleX: 1.1,
@@ -251,13 +261,11 @@ export default class Doll extends Phaser.GameObjects.Container {
       yoyo: true,
     });
 
-    // Emit warning event
     this.scene.events.emit('doll-turning-to-face');
 
-    // Rotation animation with ease
     this.scene.tweens.add({
       targets: this,
-      angle: 0, // Face players
+      angle: 0,
       duration: GAME_CONSTANTS.DOLL_TURN_DURATION,
       ease: 'Back.easeOut',
       onComplete: () => {
@@ -266,30 +274,23 @@ export default class Doll extends Phaser.GameObjects.Container {
     });
   }
 
-  /**
-   * Doll is now facing players (red light)
-   */
   private startFacingPlayers(): void {
     this.currentState = DollState.FACING_PLAYERS;
     this.isFacingPlayers = true;
 
-    // Random duration for red light
     const [min, max] = this.config.redLightDuration;
     this.stateTimer = Phaser.Math.Between(min, max);
 
-    // Visual feedback - red eyes
     this.eyes.getChildren().forEach((eye) => {
       (eye as Phaser.GameObjects.Arc).setFillStyle(COLORS.DANGER_RED);
     });
 
-    // Eye glow effect
     this.scene.tweens.add({
       targets: this.eyeGlow,
       alpha: 0.6,
       duration: 300,
     });
 
-    // Pulsing eye glow
     this.scene.tweens.add({
       targets: this.eyeGlow,
       scale: 1.3,
@@ -298,7 +299,6 @@ export default class Doll extends Phaser.GameObjects.Container {
       repeat: -1,
     });
 
-    // Create scanning laser effect
     const screenWidth = this.scene.cameras.main.width;
     const screenHeight = this.scene.cameras.main.height;
 
@@ -312,7 +312,6 @@ export default class Doll extends Phaser.GameObjects.Container {
     );
     this.scanLaser.setDepth(75);
 
-    // Animate laser scanning up and down
     this.scene.tweens.add({
       targets: this.scanLaser,
       y: 100,
@@ -321,27 +320,16 @@ export default class Doll extends Phaser.GameObjects.Container {
       ease: 'Linear',
     });
 
-    console.log(`🔴 RED LIGHT for ${(this.stateTimer / 1000).toFixed(1)}s`);
-
-    // Emit event
     this.scene.events.emit('doll-red-light', { duration: this.stateTimer });
   }
 
-  /**
-   * Start turning away (back to green light)
-   */
   private startTurningAway(): void {
     this.currentState = DollState.TURNING_AWAY;
-
-    console.log('🔄 Doll turning away...');
-
-    // Emit event
     this.scene.events.emit('doll-turning-away');
 
-    // Rotation animation
     this.scene.tweens.add({
       targets: this,
-      angle: 180, // Face away
+      angle: 180,
       duration: GAME_CONSTANTS.DOLL_TURN_DURATION,
       ease: 'Power2',
       onComplete: () => {
@@ -350,27 +338,16 @@ export default class Doll extends Phaser.GameObjects.Container {
     });
   }
 
-  /**
-   * Start the doll's cycle
-   */
   startCycle(): void {
-    console.log('🎎 Starting doll cycle');
     this.isCycleStopped = false;
     this.startFacingAway();
   }
 
-  /**
-   * Stop the doll's cycle
-   */
   stopCycle(): void {
-    console.log('🎎 Stopping doll cycle');
     this.isCycleStopped = true;
     this.stateTimer = 0;
   }
 
-  /**
-   * Check if doll is currently facing players (red light)
-   */
   isFacing(): boolean {
     return this.isFacingPlayers && this.currentState === DollState.FACING_PLAYERS;
   }

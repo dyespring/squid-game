@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 import { SCENES, COLORS } from '../config/constants';
 import type { Difficulty } from '@/types/game.types';
 import SoundGenerator from '../utils/SoundGenerator';
+import MusicGenerator from '../utils/MusicGenerator';
 import ParticleManager from '../managers/ParticleManager';
 
 interface PathPoint { x: number; y: number }
@@ -53,6 +54,7 @@ export default class HoneycombScene extends Phaser.Scene {
   private pressureBar!: Phaser.GameObjects.Rectangle;
 
   private soundGenerator!: SoundGenerator;
+  private musicGenerator!: MusicGenerator;
   private particleManager!: ParticleManager;
 
   private isPaused: boolean = false;
@@ -79,14 +81,47 @@ export default class HoneycombScene extends Phaser.Scene {
     this.lastPointer = null;
 
     this.soundGenerator = new SoundGenerator();
+    this.musicGenerator = new MusicGenerator();
     this.particleManager = new ParticleManager(this);
     this.cameras.main.fadeIn(500);
+
+    const musicEnabled = this.registry.get('musicEnabled') ?? true;
+    if (musicEnabled) this.musicGenerator.playHoneycombMusic();
 
     this.cookieCenterX = width / 2;
     this.cookieCenterY = height / 2 - 20;
 
-    // Dark warm background
-    this.add.rectangle(width / 2, height / 2, width, height, 0x3b2a1a);
+    // Wooden table with warm ambient gradient and wood-grain lines
+    const bgGfx = this.add.graphics().setDepth(-2);
+    for (let i = 0; i < 15; i++) {
+      const t = i / 15;
+      const r = Math.floor(0x30 + t * 0x14);
+      const g = Math.floor(0x22 + t * 0x0c);
+      const b = Math.floor(0x14 + t * 0x08);
+      bgGfx.fillStyle((r << 16) | (g << 8) | b, 1);
+      bgGfx.fillRect(0, (i / 15) * height, width, height / 15 + 1);
+    }
+
+    // Wood grain
+    bgGfx.lineStyle(1, 0x4a3520, 0.15);
+    for (let i = 0; i < 12; i++) {
+      const gy = Phaser.Math.Between(10, height - 10);
+      const wobble = Phaser.Math.Between(-10, 10);
+      bgGfx.beginPath();
+      bgGfx.moveTo(0, gy);
+      bgGfx.lineTo(width * 0.3, gy + wobble);
+      bgGfx.lineTo(width * 0.7, gy - wobble);
+      bgGfx.lineTo(width, gy + Phaser.Math.Between(-8, 8));
+      bgGfx.strokePath();
+    }
+
+    // Vignette effect (dark corners)
+    bgGfx.fillStyle(0x000000, 0.2);
+    bgGfx.fillRect(0, 0, width, 30);
+    bgGfx.fillRect(0, height - 30, width, 30);
+    bgGfx.fillStyle(0x000000, 0.1);
+    bgGfx.fillRect(0, 0, 20, height);
+    bgGfx.fillRect(width - 20, 0, 20, height);
 
     // Cookie
     this.drawCookie();
@@ -335,11 +370,17 @@ export default class HoneycombScene extends Phaser.Scene {
 
     this.needleDot.setPosition(p.x, p.y);
 
-    // Check speed (distance since last pointer)
     if (this.lastPointer) {
       const moveDist = Phaser.Math.Distance.Between(p.x, p.y, this.lastPointer.x, this.lastPointer.y);
       if (moveDist > 30) {
         this.pressure += this.cfg.pressureRate * 2;
+        // Needle wobble on fast movement
+        this.tweens.add({
+          targets: this.needleDot,
+          scale: 1.4,
+          duration: 40,
+          yoyo: true,
+        });
       }
     }
     this.lastPointer = { x: p.x, y: p.y };
@@ -357,18 +398,28 @@ export default class HoneycombScene extends Phaser.Scene {
         break;
       }
 
-      // Point reached — draw trace
       if (this.nextPointIndex > 0) {
         const prev = this.shapePath[this.nextPointIndex - 1];
+
+        // Main trace line
         this.traceGraphics.lineStyle(3, 0x44ee88, 0.9);
         this.traceGraphics.beginPath();
         this.traceGraphics.moveTo(prev.x, prev.y);
         this.traceGraphics.lineTo(target.x, target.y);
         this.traceGraphics.strokePath();
+
+        // Glow behind recent segment
+        const glowDot = this.add.arc(target.x, target.y, 6, 0, 360, false, 0x44ee88, 0.4).setDepth(5);
+        this.tweens.add({
+          targets: glowDot,
+          alpha: 0, scale: 2,
+          duration: 300,
+          onComplete: () => glowDot.destroy(),
+        });
       }
 
       this.nextPointIndex++;
-      this.soundGenerator.playFootstep(0.08);
+      this.soundGenerator.playNeedleScratch();
       this.updateProgressBar();
 
       if (this.nextPointIndex >= this.shapePath.length) {
@@ -404,23 +455,40 @@ export default class HoneycombScene extends Phaser.Scene {
 
   private updateCrackOverlay(): void {
     this.crackGraphics.clear();
-    if (this.pressure < 30) return;
+    if (this.pressure < 25) return;
 
-    const intensity = (this.pressure - 30) / 70;
-    const numCracks = Math.floor(intensity * 6);
+    const intensity = (this.pressure - 25) / 75;
+    const numCracks = Math.floor(intensity * 8);
 
-    this.crackGraphics.lineStyle(1, 0x705010, intensity * 0.8);
+    // Cookie shake at high pressure
+    if (this.pressure > 60) {
+      const shake = (this.pressure - 60) / 40;
+      this.crackGraphics.x = (Math.random() - 0.5) * shake * 4;
+      this.crackGraphics.y = (Math.random() - 0.5) * shake * 4;
+    } else {
+      this.crackGraphics.x = 0;
+      this.crackGraphics.y = 0;
+    }
+
+    // Branching crack lines
     for (let i = 0; i < numCracks; i++) {
-      const angle = (i / numCracks) * Math.PI * 2 + i * 0.3;
-      const len = 20 + intensity * 40;
-      const sx = this.cookieCenterX + Math.cos(angle) * 20;
-      const sy = this.cookieCenterY + Math.sin(angle) * 20;
+      const baseAngle = (i / numCracks) * Math.PI * 2 + i * 0.5;
+      const len = 15 + intensity * 50;
+      let sx = this.cookieCenterX + Math.cos(baseAngle) * 15;
+      let sy = this.cookieCenterY + Math.sin(baseAngle) * 15;
+
+      this.crackGraphics.lineStyle(1 + intensity, 0x705010, 0.5 + intensity * 0.5);
       this.crackGraphics.beginPath();
       this.crackGraphics.moveTo(sx, sy);
-      this.crackGraphics.lineTo(
-        sx + Math.cos(angle) * len + Phaser.Math.Between(-8, 8),
-        sy + Math.sin(angle) * len + Phaser.Math.Between(-8, 8)
-      );
+
+      const segments = 3 + Math.floor(intensity * 3);
+      for (let s = 0; s < segments; s++) {
+        const segLen = len / segments;
+        const wobble = (Math.random() - 0.5) * 12;
+        sx += Math.cos(baseAngle + wobble * 0.1) * segLen;
+        sy += Math.sin(baseAngle + wobble * 0.1) * segLen;
+        this.crackGraphics.lineTo(sx + wobble, sy + wobble);
+      }
       this.crackGraphics.strokePath();
     }
   }
@@ -454,6 +522,7 @@ export default class HoneycombScene extends Phaser.Scene {
       repeat: 2,
     });
     this.soundGenerator.playCountdown();
+    this.soundGenerator.playGameStart();
   }
 
   private handleVictory(): void {
@@ -481,6 +550,17 @@ export default class HoneycombScene extends Phaser.Scene {
     this.soundGenerator.playVictory();
     this.particleManager.createConfetti(this.cookieCenterX, this.cookieCenterY);
 
+    // Golden glow radiating from shape
+    const glow = this.add.arc(this.cookieCenterX, this.cookieCenterY, 30, 0, 360, false, 0xffd700, 0.5).setDepth(15);
+    this.tweens.add({
+      targets: glow,
+      radius: COOKIE_RADIUS * 1.5,
+      alpha: 0,
+      duration: 800,
+      ease: 'Power2',
+      onComplete: () => glow.destroy(),
+    });
+
     const { width } = this.cameras.main;
     this.add.text(width / 2, this.cookieCenterY - COOKIE_RADIUS - 30, 'COMPLETE!', {
       fontSize: '36px', color: '#44EE88', fontStyle: 'bold',
@@ -496,25 +576,41 @@ export default class HoneycombScene extends Phaser.Scene {
     this.isGameActive = false;
 
     this.cameras.main.shake(500, 0.02);
-    this.soundGenerator.playGunshot();
+    this.soundGenerator.playCookieCrack();
 
-    // Shatter the cookie visually
-    const g = this.add.graphics().setDepth(20);
-    g.fillStyle(0x705010, 0.6);
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      g.beginPath();
-      g.moveTo(this.cookieCenterX, this.cookieCenterY);
-      g.lineTo(
-        this.cookieCenterX + Math.cos(angle) * (COOKIE_RADIUS + 10),
-        this.cookieCenterY + Math.sin(angle) * (COOKIE_RADIUS + 10)
+    // Shatter cookie into segments that fly apart
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2;
+      const nextAngle = ((i + 1) / 10) * Math.PI * 2;
+      const midAngle = (angle + nextAngle) / 2;
+
+      const seg = this.add.graphics().setDepth(20);
+      seg.fillStyle(0xd4a030, 0.8);
+      seg.beginPath();
+      seg.moveTo(this.cookieCenterX, this.cookieCenterY);
+      seg.lineTo(
+        this.cookieCenterX + Math.cos(angle) * COOKIE_RADIUS,
+        this.cookieCenterY + Math.sin(angle) * COOKIE_RADIUS
       );
-      g.lineTo(
-        this.cookieCenterX + Math.cos(angle + 0.3) * (COOKIE_RADIUS + 10),
-        this.cookieCenterY + Math.sin(angle + 0.3) * (COOKIE_RADIUS + 10)
+      seg.lineTo(
+        this.cookieCenterX + Math.cos(nextAngle) * COOKIE_RADIUS,
+        this.cookieCenterY + Math.sin(nextAngle) * COOKIE_RADIUS
       );
-      g.closePath();
-      g.strokePath();
+      seg.closePath();
+      seg.fillPath();
+      seg.lineStyle(1, 0x705010, 0.8);
+      seg.strokePath();
+
+      this.tweens.add({
+        targets: seg,
+        x: Math.cos(midAngle) * Phaser.Math.Between(30, 80),
+        y: Math.sin(midAngle) * Phaser.Math.Between(30, 80),
+        angle: Phaser.Math.Between(-90, 90),
+        alpha: 0,
+        duration: 600 + Math.random() * 400,
+        ease: 'Power2',
+        onComplete: () => seg.destroy(),
+      });
     }
 
     const { width } = this.cameras.main;
@@ -601,6 +697,7 @@ export default class HoneycombScene extends Phaser.Scene {
 
   shutdown(): void {
     this.isPaused = false;
+    this.musicGenerator?.stopMusic();
     this.input.keyboard?.off('keydown-ESC');
     this.input.off('pointerdown');
     this.input.off('pointermove');

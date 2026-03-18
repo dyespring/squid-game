@@ -4,12 +4,16 @@
  */
 
 import Phaser from 'phaser';
-import { SCENES, COLORS } from '../config/constants';
+import { SCENES } from '../config/constants';
 import { HighScoreManager } from '../managers/HighScoreManager';
 import type { Difficulty } from '@/types/game.types';
+import SoundGenerator from '../utils/SoundGenerator';
+import MusicGenerator from '../utils/MusicGenerator';
 
 export default class VictoryScene extends Phaser.Scene {
   private highScoreManager!: HighScoreManager;
+  private soundGenerator!: SoundGenerator;
+  private musicGenerator!: MusicGenerator;
 
   constructor() {
     super({ key: SCENES.VICTORY });
@@ -17,6 +21,10 @@ export default class VictoryScene extends Phaser.Scene {
 
   create(): void {
     console.log('🎉 VictoryScene');
+    this.soundGenerator = new SoundGenerator();
+    this.musicGenerator = new MusicGenerator();
+    this.soundGenerator.playVictory();
+    this.musicGenerator.playVictoryStinger();
 
     const { width, height } = this.cameras.main;
 
@@ -44,8 +52,16 @@ export default class VictoryScene extends Phaser.Scene {
     // Fade in
     this.cameras.main.fadeIn(300);
 
-    // Background
-    this.add.rectangle(width / 2, height / 2, width, height, COLORS.TRACKSUIT_GREEN, 0.9);
+    // Background gradient
+    const bgGfx = this.add.graphics().setDepth(-2);
+    for (let i = 0; i < 15; i++) {
+      const t = i / 15;
+      const r = Math.floor(0x00 + t * 0x08);
+      const g = Math.floor(0x8c - t * 0x20);
+      const b = Math.floor(0x62 - t * 0x18);
+      bgGfx.fillStyle((r << 16) | (g << 8) | b, 0.92);
+      bgGfx.fillRect(0, (i / 15) * height, width, height / 15 + 1);
+    }
 
     // Title
     const title = this.add.text(width / 2, 80, 'VICTORY!', {
@@ -89,11 +105,11 @@ export default class VictoryScene extends Phaser.Scene {
     const breakdownY = isPerfect ? 200 : 180;
     this.createScoreBreakdown(width / 2, breakdownY, scoreBreakdown, difficulty);
 
-    // Final score - larger and prominent
+    // Final score with counting animation
     const finalScoreText = this.add.text(
       width / 2,
       breakdownY + 160,
-      `${currentScore}`,
+      '0',
       {
         fontSize: '48px',
         color: '#FFD700',
@@ -103,6 +119,18 @@ export default class VictoryScene extends Phaser.Scene {
       }
     );
     finalScoreText.setOrigin(0.5);
+
+    const counter = { val: 0 };
+    this.tweens.add({
+      targets: counter,
+      val: currentScore,
+      duration: 1200,
+      delay: 400,
+      ease: 'Power2',
+      onUpdate: () => {
+        finalScoreText.setText(`${Math.floor(counter.val)}`);
+      },
+    });
 
     // High score status
     const statusY = breakdownY + 220;
@@ -149,14 +177,14 @@ export default class VictoryScene extends Phaser.Scene {
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start(SCENES.GAME);
       });
-    });
+    }, 800);
 
     this.createButton(width / 2, height - 70, 'MENU', () => {
       this.cameras.main.fadeOut(300);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start(SCENES.MENU);
       });
-    });
+    }, 1000);
   }
 
   private createScoreBreakdown(
@@ -166,6 +194,7 @@ export default class VictoryScene extends Phaser.Scene {
     difficulty: Difficulty
   ): void {
     if (!breakdown) return;
+    this.breakdownIndex = 0;
 
     const lineHeight = 24;
     let currentY = y;
@@ -221,6 +250,8 @@ export default class VictoryScene extends Phaser.Scene {
       .setOrigin(0.5);
   }
 
+  private breakdownIndex: number = 0;
+
   private createBreakdownLine(
     x: number,
     y: number,
@@ -229,12 +260,23 @@ export default class VictoryScene extends Phaser.Scene {
     color: string,
     bold: boolean = false
   ): void {
+    const delay = 200 + this.breakdownIndex * 150;
+    this.breakdownIndex++;
+
     const labelText = this.add.text(x - 120, y, label, {
       fontSize: '14px',
       color: color,
       fontStyle: bold ? 'bold' : 'normal',
     });
-    labelText.setOrigin(0, 0.5);
+    labelText.setOrigin(0, 0.5).setAlpha(0);
+
+    this.tweens.add({
+      targets: labelText,
+      alpha: 1,
+      x: { from: x - 140, to: x - 120 },
+      duration: 300,
+      delay,
+    });
 
     if (value !== '') {
       const valueText = this.add.text(x + 120, y, `${value}`, {
@@ -242,11 +284,19 @@ export default class VictoryScene extends Phaser.Scene {
         color: color,
         fontStyle: bold ? 'bold' : 'normal',
       });
-      valueText.setOrigin(1, 0.5);
+      valueText.setOrigin(1, 0.5).setAlpha(0);
+
+      this.tweens.add({
+        targets: valueText,
+        alpha: 1,
+        x: { from: x + 140, to: x + 120 },
+        duration: 300,
+        delay,
+      });
     }
   }
 
-  private createButton(x: number, y: number, text: string, callback: () => void): void {
+  private createButton(x: number, y: number, text: string, callback: () => void, delay: number = 0): void {
     const button = this.add.text(x, y, text, {
       fontSize: '20px',
       color: '#008C62',
@@ -256,15 +306,32 @@ export default class VictoryScene extends Phaser.Scene {
     });
     button.setOrigin(0.5);
     button.setInteractive({ useHandCursor: true });
+    button.setAlpha(0);
+
+    this.tweens.add({
+      targets: button,
+      alpha: 1,
+      y: { from: y + 20, to: y },
+      duration: 400,
+      delay,
+      ease: 'Back.easeOut',
+    });
 
     button.on('pointerover', () => {
-      button.setScale(1.1);
+      this.tweens.add({ targets: button, scale: 1.08, duration: 100 });
       button.setStyle({ backgroundColor: '#FFD700' });
+      this.soundGenerator.playUIHover();
     });
     button.on('pointerout', () => {
-      button.setScale(1);
+      this.tweens.add({ targets: button, scale: 1, duration: 100 });
       button.setStyle({ backgroundColor: '#FFFFFF' });
     });
-    button.on('pointerdown', callback);
+    button.on('pointerdown', () => {
+      this.soundGenerator.playUIClick();
+      this.tweens.add({
+        targets: button, scaleX: 0.95, scaleY: 0.95, duration: 60, yoyo: true,
+        onComplete: callback,
+      });
+    });
   }
 }

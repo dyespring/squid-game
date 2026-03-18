@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 import { SCENES, COLORS } from '../config/constants';
 import type { Difficulty } from '@/types/game.types';
 import SoundGenerator from '../utils/SoundGenerator';
+import MusicGenerator from '../utils/MusicGenerator';
 import ParticleManager from '../managers/ParticleManager';
 
 interface PanelPair {
@@ -45,6 +46,7 @@ export default class GlassBridgeScene extends Phaser.Scene {
   private rowLabel!: Phaser.GameObjects.Text;
   private isGameActive: boolean = false;
   private soundGenerator!: SoundGenerator;
+  private musicGenerator!: MusicGenerator;
   private particleManager!: ParticleManager;
   private npcRunners: NpcRunner[] = [];
   private streak: number = 0;
@@ -73,12 +75,42 @@ export default class GlassBridgeScene extends Phaser.Scene {
     this.npcRunners = [];
 
     this.soundGenerator = new SoundGenerator();
+    this.musicGenerator = new MusicGenerator();
     this.particleManager = new ParticleManager(this);
+
+    const musicEnabled = this.registry.get('musicEnabled') ?? true;
+    if (musicEnabled) this.musicGenerator.playBridgeMusic();
 
     this.cameras.main.fadeIn(500);
 
-    // Background — dark atmosphere
-    this.add.rectangle(width / 2, height / 2, width, height, 0x0a0a2e);
+    // Background — dark atmosphere with depth gradient
+    const bgGfx = this.add.graphics().setDepth(-2);
+    const steps = 15;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const r = Math.floor(0x04 + t * 0x0a);
+      const g = Math.floor(0x04 + t * 0x0a);
+      const b = Math.floor(0x18 + t * 0x20);
+      bgGfx.fillStyle((r << 16) | (g << 8) | b, 1);
+      bgGfx.fillRect(0, (i / steps) * height, width, height / steps + 1);
+    }
+
+    // Twinkling stars
+    for (let i = 0; i < 40; i++) {
+      const sx = Phaser.Math.Between(0, width);
+      const sy = Phaser.Math.Between(0, height);
+      const sr = Math.random() < 0.3 ? 1.5 : 1;
+      const star = this.add.arc(sx, sy, sr, 0, 360, false, 0xffffff, 0.3 + Math.random() * 0.5);
+      star.setDepth(-1);
+      this.tweens.add({
+        targets: star,
+        alpha: 0.1,
+        duration: 1000 + Math.random() * 2000,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 2000,
+      });
+    }
 
     // Layout
     this.gap = 14;
@@ -89,9 +121,12 @@ export default class GlassBridgeScene extends Phaser.Scene {
     this.bridgeTop = (height - totalBridgeHeight) / 2 + 10;
     this.bridgeLeft = 30;
 
-    // Side rails
+    // Side rails with glow
     const railColor = 0x444488;
+    const railGlow = 0x6666cc;
+    this.add.rectangle(this.bridgeLeft - 4, height / 2, 10, totalBridgeHeight + 20, railGlow, 0.15);
     this.add.rectangle(this.bridgeLeft - 4, height / 2, 4, totalBridgeHeight + 20, railColor);
+    this.add.rectangle(width - this.bridgeLeft + 4, height / 2, 10, totalBridgeHeight + 20, railGlow, 0.15);
     this.add.rectangle(width - this.bridgeLeft + 4, height / 2, 4, totalBridgeHeight + 20, railColor);
 
     // Build panels (bottom = row 0, top = last row = finish)
@@ -289,9 +324,19 @@ export default class GlassBridgeScene extends Phaser.Scene {
       pair.revealed = true;
       this.streak++;
       this.currentRow = row;
-      this.soundGenerator.playFootstep(0.4);
+      this.soundGenerator.playGlassStep(0.4);
       rect.setFillStyle(0x44ee88, 0.6);
       (side === 0 ? pair.leftBorder : pair.rightBorder).setStrokeStyle(2, 0x44ee88, 1);
+
+      // Safe-step glow pulse
+      const glow = this.add.rectangle(rect.x, rect.y, this.panelWidth + 8, this.panelHeight + 8, 0x44ee88, 0.3);
+      glow.setDepth(1);
+      this.tweens.add({
+        targets: glow,
+        alpha: 0, scale: 1.3,
+        duration: 400,
+        onComplete: () => glow.destroy(),
+      });
 
       this.rowLabel.setText(`Step ${row + 1} / ${cfg.rows}`);
 
@@ -304,7 +349,7 @@ export default class GlassBridgeScene extends Phaser.Scene {
       // Wrong — glass shatters
       this.isGameActive = false;
       this.shatterPanel(row, side);
-      this.soundGenerator.playGunshot();
+      this.soundGenerator.playGlassShatter();
       this.cameras.main.shake(400, 0.015);
 
       this.tweens.add({
@@ -327,26 +372,46 @@ export default class GlassBridgeScene extends Phaser.Scene {
     rect.setFillStyle(0xe63946, 0.6);
     border.setStrokeStyle(2, 0xe63946, 1);
 
-    // Shatter particles
-    for (let i = 0; i < 8; i++) {
+    // Richer shatter — more shards with varied sizes and sparkle
+    const shardCount = 14;
+    for (let i = 0; i < shardCount; i++) {
+      const size = Phaser.Math.Between(3, 12);
       const shard = this.add.rectangle(
-        rect.x + Phaser.Math.Between(-20, 20),
-        rect.y + Phaser.Math.Between(-10, 10),
-        Phaser.Math.Between(4, 10),
-        Phaser.Math.Between(4, 10),
-        0x88ccff,
-        0.8
+        rect.x + Phaser.Math.Between(-25, 25),
+        rect.y + Phaser.Math.Between(-12, 12),
+        size,
+        size * (0.5 + Math.random() * 1),
+        i % 3 === 0 ? 0xaaddff : 0x88ccff,
+        0.7 + Math.random() * 0.3
       );
       shard.setAngle(Phaser.Math.Between(0, 360));
+      shard.setDepth(50);
       this.tweens.add({
         targets: shard,
-        y: shard.y + Phaser.Math.Between(60, 160),
-        x: shard.x + Phaser.Math.Between(-30, 30),
+        y: shard.y + Phaser.Math.Between(80, 200),
+        x: shard.x + Phaser.Math.Between(-40, 40),
         alpha: 0,
-        angle: Phaser.Math.Between(-180, 180),
-        duration: 700,
+        angle: shard.angle + Phaser.Math.Between(-360, 360),
+        scale: 0.2,
+        duration: 800 + Math.random() * 400,
         ease: 'Quad.easeIn',
         onComplete: () => shard.destroy(),
+      });
+    }
+
+    // Sparkle particles
+    for (let i = 0; i < 6; i++) {
+      const sparkle = this.add.arc(
+        rect.x + Phaser.Math.Between(-15, 15),
+        rect.y + Phaser.Math.Between(-8, 8),
+        2, 0, 360, false, 0xffffff, 0.8
+      ).setDepth(51);
+      this.tweens.add({
+        targets: sparkle,
+        y: sparkle.y + Phaser.Math.Between(20, 80),
+        alpha: 0,
+        duration: 400 + Math.random() * 300,
+        onComplete: () => sparkle.destroy(),
       });
     }
 
@@ -390,6 +455,7 @@ export default class GlassBridgeScene extends Phaser.Scene {
       repeat: 2,
     });
     this.soundGenerator.playCountdown();
+    this.soundGenerator.playGameStart();
   }
 
   private handleVictory(): void {
@@ -520,6 +586,7 @@ export default class GlassBridgeScene extends Phaser.Scene {
 
   shutdown(): void {
     this.isPaused = false;
+    this.musicGenerator?.stopMusic();
     this.input.keyboard?.off('keydown-ESC');
   }
 }

@@ -17,25 +17,24 @@ export default class ParticleManager {
    * Emit dust particles when player is moving
    */
   emitDust(x: number, y: number): void {
-    const particleCount = 3;
-
-    for (let i = 0; i < particleCount; i++) {
+    const count = 4;
+    for (let i = 0; i < count; i++) {
+      const size = Phaser.Math.Between(2, 6);
       const particle = this.scene.add.circle(
-        x + Phaser.Math.Between(-10, 10),
+        x + Phaser.Math.Between(-12, 12),
         y + 20,
-        Phaser.Math.Between(2, 4),
+        size,
         COLORS.CONCRETE_GRAY,
-        0.6
+        0.4 + Math.random() * 0.3
       );
 
-      // Animate particle
       this.scene.tweens.add({
         targets: particle,
-        x: particle.x + Phaser.Math.Between(-20, 20),
-        y: particle.y + Phaser.Math.Between(10, 20),
+        x: particle.x + Phaser.Math.Between(-25, 25),
+        y: particle.y + Phaser.Math.Between(-15, 8),
         alpha: 0,
-        scale: 0,
-        duration: 400,
+        scale: 0.2,
+        duration: 500 + Math.random() * 200,
         ease: 'Power2',
         onComplete: () => particle.destroy(),
       });
@@ -46,12 +45,15 @@ export default class ParticleManager {
    * Create explosion effect on elimination
    */
   createElimination(x: number, y: number): void {
-    const particleCount = 20;
+    const particleCount = 25;
 
+    // Outer burst ring
     for (let i = 0; i < particleCount; i++) {
       const angle = (Math.PI * 2 * i) / particleCount;
-      const speed = Phaser.Math.Between(100, 200);
-      const particle = this.scene.add.circle(x, y, 4, COLORS.DANGER_RED, 0.8);
+      const speed = Phaser.Math.Between(80, 220);
+      const size = Phaser.Math.Between(3, 7);
+      const particle = this.scene.add.circle(x, y, size, COLORS.DANGER_RED, 0.9);
+      particle.setDepth(100);
 
       this.scene.tweens.add({
         targets: particle,
@@ -59,29 +61,43 @@ export default class ParticleManager {
         y: y + Math.sin(angle) * speed,
         alpha: 0,
         scale: 0,
-        duration: 800,
+        duration: 700 + Math.random() * 300,
         ease: 'Power2',
         onComplete: () => particle.destroy(),
       });
     }
 
-    // Flash effect
-    const flash = this.scene.add.rectangle(
-      this.scene.cameras.main.centerX,
-      this.scene.cameras.main.centerY,
-      this.scene.cameras.main.width,
-      this.scene.cameras.main.height,
-      COLORS.DANGER_RED,
-      0
-    );
-    flash.setDepth(200);
+    // Inner bright core
+    const core = this.scene.add.circle(x, y, 20, 0xffaa00, 0.8);
+    core.setDepth(101);
+    this.scene.tweens.add({
+      targets: core,
+      scale: 3,
+      alpha: 0,
+      duration: 400,
+      ease: 'Power2',
+      onComplete: () => core.destroy(),
+    });
 
+    // Full-screen flash
+    const { centerX, centerY, width: cw, height: ch } = this.scene.cameras.main;
+    const flash = this.scene.add.rectangle(centerX, centerY, cw, ch, COLORS.DANGER_RED, 0);
+    flash.setDepth(200);
     this.scene.tweens.add({
       targets: flash,
       alpha: 0.5,
-      duration: 100,
+      duration: 80,
       yoyo: true,
       onComplete: () => flash.destroy(),
+    });
+
+    // Border flash (red edges)
+    const borderTop = this.scene.add.rectangle(centerX, 0, cw, 6, COLORS.DANGER_RED, 0.8).setDepth(201).setOrigin(0.5, 0);
+    const borderBot = this.scene.add.rectangle(centerX, ch, cw, 6, COLORS.DANGER_RED, 0.8).setDepth(201).setOrigin(0.5, 1);
+    [borderTop, borderBot].forEach(b => {
+      this.scene.tweens.add({
+        targets: b, alpha: 0, duration: 600, onComplete: () => b.destroy(),
+      });
     });
   }
 

@@ -7,6 +7,8 @@ import Phaser from 'phaser';
 import { SCENES, COLORS } from '../config/constants';
 import { HighScoreManager } from '../managers/HighScoreManager';
 import type { Difficulty } from '@/types/game.types';
+import SoundGenerator from '../utils/SoundGenerator';
+import MusicGenerator from '../utils/MusicGenerator';
 
 interface GameOverData {
   reason: 'eliminated' | 'timeout';
@@ -17,6 +19,8 @@ interface GameOverData {
 }
 
 export default class GameOverScene extends Phaser.Scene {
+  private soundGenerator!: SoundGenerator;
+
   constructor() {
     super({ key: SCENES.GAME_OVER });
   }
@@ -27,10 +31,24 @@ export default class GameOverScene extends Phaser.Scene {
     const data = this.registry.get('gameOverData') as GameOverData | undefined;
     const difficulty = data?.difficulty ?? 'NORMAL';
 
+    this.soundGenerator = new SoundGenerator();
+    const musicGenerator = new MusicGenerator();
+    this.soundGenerator.playEliminationDramatic();
+    musicGenerator.playGameOverStinger();
+    this.statIndex = 0;
+
     this.cameras.main.fadeIn(300);
 
-    // Background
-    this.add.rectangle(width / 2, height / 2, width, height, COLORS.GEOMETRIC_BLACK, 0.9);
+    // Background gradient (dark with slight red tint)
+    const bgGfx = this.add.graphics().setDepth(-2);
+    for (let i = 0; i < 15; i++) {
+      const t = i / 15;
+      const r = Math.floor(0x1a + t * 0x10);
+      const g = Math.floor(0x0a + t * 0x08);
+      const b = Math.floor(0x0a + t * 0x08);
+      bgGfx.fillStyle((r << 16) | (g << 8) | b, 0.95);
+      bgGfx.fillRect(0, (i / 15) * height, width, height / 15 + 1);
+    }
 
     // Title
     const titleText = data?.reason === 'timeout' ? "TIME'S UP" : 'ELIMINATED';
@@ -111,20 +129,30 @@ export default class GameOverScene extends Phaser.Scene {
       }
     }
 
+    // Red pulse on entry
+    const pulse = this.add.rectangle(width / 2, height / 2, width, height, COLORS.DANGER_RED, 0).setDepth(150);
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0.4,
+      duration: 150,
+      yoyo: true,
+      onComplete: () => pulse.destroy(),
+    });
+
     // Buttons
     this.createButton(width / 2, height - 140, 'TRY AGAIN', () => {
       this.cameras.main.fadeOut(300);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start(SCENES.GAME);
       });
-    });
+    }, 600);
 
     this.createButton(width / 2, height - 70, 'MENU', () => {
       this.cameras.main.fadeOut(300);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start(SCENES.MENU);
       });
-    });
+    }, 800);
   }
 
   private createProgressBar(x: number, y: number, percent: number): void {
@@ -168,24 +196,32 @@ export default class GameOverScene extends Phaser.Scene {
       .setDepth(1);
   }
 
+  private statIndex: number = 0;
+
   private createStatLine(x: number, y: number, label: string, value: string): void {
-    this.add
+    const delay = 200 + this.statIndex * 150;
+    this.statIndex++;
+
+    const lt = this.add
       .text(x - 100, y, label, {
         fontSize: '14px',
         color: '#AAAAAA',
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5).setAlpha(0);
 
-    this.add
+    const vt = this.add
       .text(x + 100, y, value, {
         fontSize: '14px',
         color: '#FFFFFF',
         fontStyle: 'bold',
       })
-      .setOrigin(1, 0.5);
+      .setOrigin(1, 0.5).setAlpha(0);
+
+    this.tweens.add({ targets: lt, alpha: 1, x: { from: x - 120, to: x - 100 }, duration: 300, delay });
+    this.tweens.add({ targets: vt, alpha: 1, x: { from: x + 120, to: x + 100 }, duration: 300, delay });
   }
 
-  private createButton(x: number, y: number, text: string, callback: () => void): void {
+  private createButton(x: number, y: number, text: string, callback: () => void, delay: number = 0): void {
     const button = this.add.text(x, y, text, {
       fontSize: '20px',
       color: '#FFFFFF',
@@ -195,15 +231,32 @@ export default class GameOverScene extends Phaser.Scene {
     });
     button.setOrigin(0.5);
     button.setInteractive({ useHandCursor: true });
+    button.setAlpha(0);
+
+    this.tweens.add({
+      targets: button,
+      alpha: 1,
+      y: { from: y + 20, to: y },
+      duration: 400,
+      delay,
+      ease: 'Back.easeOut',
+    });
 
     button.on('pointerover', () => {
-      button.setScale(1.1);
+      this.tweens.add({ targets: button, scale: 1.08, duration: 100 });
       button.setStyle({ backgroundColor: '#FF4581' });
+      this.soundGenerator.playUIHover();
     });
     button.on('pointerout', () => {
-      button.setScale(1);
+      this.tweens.add({ targets: button, scale: 1, duration: 100 });
       button.setStyle({ backgroundColor: '#E63946' });
     });
-    button.on('pointerdown', callback);
+    button.on('pointerdown', () => {
+      this.soundGenerator.playUIClick();
+      this.tweens.add({
+        targets: button, scaleX: 0.95, scaleY: 0.95, duration: 60, yoyo: true,
+        onComplete: callback,
+      });
+    });
   }
 }

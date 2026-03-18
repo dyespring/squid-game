@@ -19,7 +19,7 @@ import MovementSystem from '../systems/MovementSystem';
 import GameStateManager from '../systems/GameStateManager';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import SoundGenerator from '../utils/SoundGenerator';
-import AudioManager from '../managers/AudioManager';
+import MusicGenerator from '../utils/MusicGenerator';
 
 export default class GameScene extends Phaser.Scene {
   // Configuration
@@ -39,7 +39,7 @@ export default class GameScene extends Phaser.Scene {
   private stateManager!: GameStateManager;
   private scoreSystem!: ScoreSystem;
   private soundGenerator!: SoundGenerator;
-  private audioManager!: AudioManager;
+  private musicGenerator!: MusicGenerator;
   private musicEnabled: boolean = true;
 
   // UI
@@ -72,10 +72,7 @@ export default class GameScene extends Phaser.Scene {
     // Fade in
     this.cameras.main.fadeIn(500);
 
-    // Background
-    this.add.rectangle(width / 2, height / 2, width, height, COLORS.BACKGROUND_CREAM);
-
-    // Create field visualization
+    // Create field visualization (includes gradient background)
     this.createField();
 
     // Create entities
@@ -83,20 +80,8 @@ export default class GameScene extends Phaser.Scene {
     this.createNPCs(width, height);
     this.doll = new Doll(this, width / 2, 80, config);
 
-    // Check music setting
     this.musicEnabled = this.registry.get('musicEnabled') ?? true;
-
-    // Get AudioManager from registry
-    this.audioManager = this.registry.get('audioManager') as AudioManager;
-
-    // Load gameplay music
-    if (!this.audioManager) {
-      console.warn('AudioManager not found in registry, creating new instance');
-      this.audioManager = new AudioManager();
-    }
-
-    // Load the Squid Game background music
-    this.audioManager.loadMusic('gameplay', ['/audio/gameplay-music.mp3']);
+    this.musicGenerator = new MusicGenerator();
 
     // Create systems
     this.inputManager = new InputManager(this);
@@ -204,21 +189,52 @@ export default class GameScene extends Phaser.Scene {
   private createField(): void {
     const { width, height } = this.cameras.main;
 
-    // State border (will change color based on light)
+    // Gradient sky
+    const bg = this.add.graphics().setDepth(-2);
+    const skySteps = 20;
+    for (let i = 0; i < skySteps; i++) {
+      const t = i / skySteps;
+      const r = Math.floor(0x7a + (0xf5 - 0x7a) * t);
+      const g = Math.floor(0xbb + (0xe6 - 0xbb) * t);
+      const b = Math.floor(0xdd + (0xd3 - 0xdd) * t);
+      bg.fillStyle((r << 16) | (g << 8) | b, 1);
+      bg.fillRect(0, (i / skySteps) * height * 0.5, width, (height * 0.5) / skySteps + 1);
+    }
+
+    // Ground gradient
+    for (let i = 0; i < 10; i++) {
+      const t = i / 10;
+      const r = Math.floor(0xd0 - t * 0x30);
+      const g = Math.floor(0xc0 - t * 0x20);
+      const b = Math.floor(0xa0 - t * 0x20);
+      bg.fillStyle((r << 16) | (g << 8) | b, 1);
+      bg.fillRect(0, height * 0.5 + (i / 10) * height * 0.5, width, (height * 0.5) / 10 + 1);
+    }
+
+    // Distant wall silhouette
+    bg.fillStyle(0x888888, 0.3);
+    bg.fillRect(0, height * 0.08, width, 8);
+
+    // Lane lines on ground
+    const fieldGfx = this.add.graphics().setDepth(-1);
+    for (let i = 1; i <= 5; i++) {
+      const lx = (width / 6) * i;
+      fieldGfx.lineStyle(1, 0xaaaaaa, 0.15);
+      fieldGfx.lineBetween(lx, height * 0.1, lx, height);
+    }
+
+    // State border
     this.stateBorder = this.add.rectangle(width / 2, height / 2, width, height);
     this.stateBorder.setStrokeStyle(8, COLORS.CONCRETE_GRAY, 0);
     this.stateBorder.setDepth(-1);
 
-    // Draw simple field
-    const fieldGraphics = this.add.graphics();
-
     // Starting area
-    fieldGraphics.fillStyle(0x8c8c8c, 0.3);
-    fieldGraphics.fillRect(0, height * 0.8, width, height * 0.2);
+    fieldGfx.fillStyle(0x8c8c8c, 0.2);
+    fieldGfx.fillRect(0, height * 0.8, width, height * 0.2);
 
     // Finish line
-    fieldGraphics.fillStyle(COLORS.TRACKSUIT_GREEN, 0.5);
-    fieldGraphics.fillRect(0, 0, width, height * 0.1);
+    fieldGfx.fillStyle(COLORS.TRACKSUIT_GREEN, 0.5);
+    fieldGfx.fillRect(0, 0, width, height * 0.1);
     this.add.text(width / 2, height * 0.05, 'FINISH', {
       fontSize: '16px',
       color: '#FFFFFF',
@@ -228,8 +244,11 @@ export default class GameScene extends Phaser.Scene {
     // Distance markers
     for (let i = 1; i < 4; i++) {
       const y = height * (0.2 + i * 0.15);
-      fieldGraphics.lineStyle(2, 0x8c8c8c, 0.3);
-      fieldGraphics.lineBetween(0, y, width, y);
+      fieldGfx.lineStyle(1, 0x8c8c8c, 0.2);
+      fieldGfx.lineBetween(0, y, width, y);
+      this.add.text(width - 10, y + 4, `${75 - i * 25}%`, {
+        fontSize: '9px', color: '#999999',
+      }).setOrigin(1, 0).setDepth(0);
     }
   }
 
@@ -465,9 +484,8 @@ export default class GameScene extends Phaser.Scene {
     // Start score tracking
     this.scoreSystem.start();
 
-    // Start Squid Game background music
     if (this.musicEnabled) {
-      this.audioManager.playMusic();
+      this.musicGenerator.playGameplayMusic();
     }
 
     // Start doll cycle
@@ -488,18 +506,17 @@ export default class GameScene extends Phaser.Scene {
 
     this.timerText.setText(`Time: ${Math.ceil(this.timeRemaining)}s`);
 
-    // Warning color when low on time
     if (this.timeRemaining <= 10) {
       this.timerText.setColor('#E63946');
 
-      // Pulse animation
       if (Math.floor(this.timeRemaining) !== Math.floor(this.timeRemaining + delta / 1000)) {
         this.tweens.add({
           targets: this.timerText,
-          scale: 1.2,
+          scale: 1.3,
           duration: 100,
           yoyo: true,
         });
+        this.soundGenerator.playTimerTick();
       }
     }
   }
@@ -619,8 +636,8 @@ export default class GameScene extends Phaser.Scene {
   shutdown(): void {
     this.isPaused = false;
 
-    if (this.audioManager) {
-      this.audioManager.stopMusic();
+    if (this.musicGenerator) {
+      this.musicGenerator.stopMusic();
     }
 
     this.input.keyboard?.off('keydown-ESC');

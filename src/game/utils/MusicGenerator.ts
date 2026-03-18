@@ -9,7 +9,7 @@ export default class MusicGenerator {
   private isPlaying: boolean = false;
   private masterGain: GainNode | null = null;
   private currentNodes: (OscillatorNode | GainNode)[] = [];
-  private musicType: 'menu' | 'gameplay' | 'tension' = 'menu';
+  private musicType: string = 'menu';
   private intervalId: number | null = null;
 
   constructor() {
@@ -313,6 +313,236 @@ export default class MusicGenerator {
    */
   isPlayingMusic(): boolean {
     return this.isPlaying;
+  }
+
+  /**
+   * Suspenseful pads for Glass Bridge — sparse eerie tones with reverb-like decay
+   */
+  playBridgeMusic(): void {
+    this.stopMusic();
+    if (!this.audioContext || !this.masterGain) return;
+
+    this.musicType = 'bridge';
+    this.isPlaying = true;
+    const ctx = this.audioContext;
+
+    const createEeriePad = (freq: number, startTime: number, duration: number) => {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+      osc1.frequency.value = freq;
+      osc2.frequency.value = freq * 1.005;
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.03, startTime + 2);
+      gain.gain.linearRampToValueAtTime(0.03, startTime + duration - 2);
+      gain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 600;
+      filter.Q.value = 2;
+
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain!);
+
+      osc1.start(startTime);
+      osc2.start(startTime);
+      osc1.stop(startTime + duration);
+      osc2.stop(startTime + duration);
+      this.currentNodes.push(osc1, osc2, gain);
+    };
+
+    const chords = [
+      [130.81, 155.56, 196],   // Cm
+      [116.54, 146.83, 174.61], // Bbm
+      [123.47, 155.56, 185],    // B dim
+      [110, 130.81, 164.81],    // Am
+    ];
+
+    let idx = 0;
+    const loop = () => {
+      if (!this.isPlaying || this.musicType !== 'bridge') return;
+      chords[idx].forEach(f => createEeriePad(f, ctx.currentTime, 6));
+      idx = (idx + 1) % chords.length;
+    };
+
+    loop();
+    this.intervalId = window.setInterval(loop, 6000);
+  }
+
+  /**
+   * Driving rhythmic bass for Tug of War — percussive and intense
+   */
+  playTugMusic(): void {
+    this.stopMusic();
+    if (!this.audioContext || !this.masterGain) return;
+
+    this.musicType = 'tug';
+    this.isPlaying = true;
+    const ctx = this.audioContext;
+
+    let beat = 0;
+    const bpm = 140;
+    const beatMs = (60 / bpm) * 1000;
+
+    const createKick = (time: number) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, time);
+      osc.frequency.exponentialRampToValueAtTime(40, time + 0.15);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.15, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(time);
+      osc.stop(time + 0.2);
+      this.currentNodes.push(osc, gain);
+    };
+
+    const createDrone = (time: number, dur: number) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 55;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 200;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, time);
+      gain.gain.linearRampToValueAtTime(0.04, time + 0.5);
+      gain.gain.setValueAtTime(0.04, time + dur - 0.5);
+      gain.gain.linearRampToValueAtTime(0, time + dur);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(time);
+      osc.stop(time + dur);
+      this.currentNodes.push(osc, gain);
+    };
+
+    const loop = () => {
+      if (!this.isPlaying || this.musicType !== 'tug') return;
+      const now = ctx.currentTime;
+      if (beat % 4 === 0) createKick(now);
+      if (beat % 4 === 2) createKick(now);
+      if (beat % 16 === 0) createDrone(now, 4 * (beatMs / 1000));
+      beat++;
+    };
+
+    createDrone(ctx.currentTime, 4 * (beatMs / 1000));
+    createKick(ctx.currentTime);
+    this.intervalId = window.setInterval(loop, beatMs);
+  }
+
+  /**
+   * Delicate tense high pads for Honeycomb — breathy and fragile
+   */
+  playHoneycombMusic(): void {
+    this.stopMusic();
+    if (!this.audioContext || !this.masterGain) return;
+
+    this.musicType = 'honeycomb';
+    this.isPlaying = true;
+    const ctx = this.audioContext;
+
+    const createBreathPad = (freq: number, startTime: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.3;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 3;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.025, startTime + 3);
+      gain.gain.linearRampToValueAtTime(0.025, startTime + duration - 3);
+      gain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+
+      osc.start(startTime);
+      lfo.start(startTime);
+      osc.stop(startTime + duration);
+      lfo.stop(startTime + duration);
+      this.currentNodes.push(osc, gain);
+    };
+
+    const notes = [523.25, 659.25, 783.99, 659.25];
+    let idx = 0;
+
+    const loop = () => {
+      if (!this.isPlaying || this.musicType !== 'honeycomb') return;
+      createBreathPad(notes[idx], ctx.currentTime, 10);
+      createBreathPad(notes[idx] * 0.5, ctx.currentTime, 10);
+      idx = (idx + 1) % notes.length;
+    };
+
+    loop();
+    this.intervalId = window.setInterval(loop, 10000);
+  }
+
+  /**
+   * Short victory musical stinger
+   */
+  playVictoryStinger(): void {
+    if (!this.audioContext || !this.masterGain) return;
+    const ctx = this.audioContext;
+    const now = ctx.currentTime;
+
+    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+    notes.forEach((freq, i) => {
+      const t = now + i * 0.12;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.1, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(t);
+      osc.stop(t + 0.5);
+    });
+  }
+
+  /**
+   * Short game-over musical stinger (descending dissonant)
+   */
+  playGameOverStinger(): void {
+    if (!this.audioContext || !this.masterGain) return;
+    const ctx = this.audioContext;
+    const now = ctx.currentTime;
+
+    const notes = [440, 370, 311, 233];
+    notes.forEach((freq, i) => {
+      const t = now + i * 0.15;
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 500;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    });
   }
 
   /**
